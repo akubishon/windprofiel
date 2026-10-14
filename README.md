@@ -35,8 +35,14 @@ Vereist Python 3.12 of nieuwer; er zijn geen externe pakketten nodig.
 - **Vandaag** toont de metingen tot nu (KNMI loopt ongeveer een kwartier achter);
   de opbrengst geldt dan tot het laatste meetmoment. **Profiel ophalen** haalt
   nieuwe metingen op.
+- **Geschatte productie** bovenaan toont per park en samen de opbrengst,
+  vollasturen, gemiddeld vermogen, piek en benutting (gemiddeld vermogen gedeeld
+  door het nominale vermogen), voor de hele dag of voor de gekozen selectie.
 - Per park staan dagopbrengst en vollasturen. **Sleep** in een vermogensgrafiek
   om een tijdvak te selecteren; klik zonder slepen of op **Wis selectie** om terug te gaan.
+- **Hoogte-exponent α**: vul per park een eigen α in (0 tot 0,6, komma of punt)
+  om te zien wat dat met wind en vermogen doet; leeg laten of **Standaard** geeft
+  de geijkte waarde, die grijs in het veld staat. Ook via de API: `alpha_fryslan=0.25`.
 - Onder **Meetstations en vermogenscurves** kies je een ander KNMI-station of
   upload je een eigen curve (zie [Curve-formaat](#curve-formaat)).
 - **Download CSV** geeft de minuutreeksen in Nederlandse notatie voor Excel:

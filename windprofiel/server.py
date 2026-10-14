@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from .application import PARKS, ROOT, build_profile, csv_rows, validate_curve
+from .application import PARKS, ROOT, build_profile, csv_rows, parse_alpha, validate_curve
 from .knmi import KNMIClient, KNMIError, load_env_file
 
 STATIC = Path(__file__).parent / "static"
@@ -47,7 +47,8 @@ class Handler(BaseHTTPRequestHandler):
             query = parse_qs(request.query)
             selected = date.fromisoformat(query.get("date", [""])[0])
             stations = {key: query.get(key, [park["station"]])[0] for key, park in PARKS.items()}
-            profile = build_profile(selected, stations, wake=query.get("wake", ["1"])[0] != "0")
+            alphas = {key: parse_alpha(query.get("alpha_" + key, [None])[0]) for key in PARKS}
+            profile = build_profile(selected, stations, wake=query.get("wake", ["1"])[0] != "0", alphas=alphas)
             if request.path == "/api/profile":
                 self.json_response(200, profile)
                 return
@@ -57,7 +58,7 @@ class Handler(BaseHTTPRequestHandler):
         except KNMIError as exc:
             self.json_response(502, {"error": str(exc)})
         except (ValueError, TypeError):
-            self.json_response(400, {"error": "Controleer datum (vanaf 2025 tot en met vandaag), station en vermogenscurve."})
+            self.json_response(400, {"error": "Controleer datum (vanaf 2025 tot en met vandaag), station, hoogte-exponent (0 tot 0,6) en vermogenscurve."})
 
     def do_POST(self):
         path = urlsplit(self.path).path

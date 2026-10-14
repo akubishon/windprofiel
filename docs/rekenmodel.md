@@ -22,6 +22,8 @@ Beabuorren `h = 60 m, α = 0,20`:
 
 `n` is het dagnummer in het jaar (1 = 1 januari). Begin januari is `α` 0,18,
 begin juli 0,05, in april en oktober circa 0,115.
+In de webapp is per park een eigen `α` in te vullen (0 tot 0,6); die geldt dan
+voor de hele gekozen dag, ook voor de CSV-export.
 Deze correctie verandert het niveau van de hele reeks en daarmee, via de
 vermogenscurve, ook de grootte van de schommelingen.
 

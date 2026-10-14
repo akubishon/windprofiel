@@ -30,6 +30,47 @@
     </section>
 
     <p id="status" role="status" aria-live="polite">App starten… Geen verandering? Start de Python-webserver zoals beschreven in de README.</p>
+    <section class="dashboard" id="dashboard" aria-label="Productieoverzicht">
+      <div class="dashboard-head">
+        <h2>Geschatte productie</h2>
+        <span id="dashboard-period"></span>
+      </div>
+      <div class="tiles">
+        <article class="tile" data-park="fryslan">
+          <div class="tile-label">Windpark Fryslân</div>
+          <div class="tile-value">—</div>
+          <div class="meter" aria-hidden="true"><span></span></div>
+          <dl class="tile-facts">
+            <div><dt>Vollasturen</dt><dd data-fact="hours">—</dd></div>
+            <div><dt>Gemiddeld</dt><dd data-fact="mean">—</dd></div>
+            <div><dt>Piek</dt><dd data-fact="peak">—</dd></div>
+            <div><dt>Benutting</dt><dd data-fact="factor">—</dd></div>
+          </dl>
+        </article>
+        <article class="tile" data-park="beabuorren">
+          <div class="tile-label">Wynpark Beabuorren</div>
+          <div class="tile-value">—</div>
+          <div class="meter" aria-hidden="true"><span></span></div>
+          <dl class="tile-facts">
+            <div><dt>Vollasturen</dt><dd data-fact="hours">—</dd></div>
+            <div><dt>Gemiddeld</dt><dd data-fact="mean">—</dd></div>
+            <div><dt>Piek</dt><dd data-fact="peak">—</dd></div>
+            <div><dt>Benutting</dt><dd data-fact="factor">—</dd></div>
+          </dl>
+        </article>
+        <article class="tile total" data-park="combined">
+          <div class="tile-label">Samen</div>
+          <div class="tile-value">—</div>
+          <div class="meter" aria-hidden="true"><span></span></div>
+          <dl class="tile-facts">
+            <div><dt>Vollasturen</dt><dd data-fact="hours">—</dd></div>
+            <div><dt>Gemiddeld</dt><dd data-fact="mean">—</dd></div>
+            <div><dt>Piek</dt><dd data-fact="peak">—</dd></div>
+            <div><dt>Benutting</dt><dd data-fact="factor">—</dd></div>
+          </dl>
+        </article>
+      </div>
+    </section>
     <noscript>Schakel JavaScript in om de KNMI-data en grafieken te laden.</noscript>
     <aside class="notice">Minuutwaarden zijn schattingen uit tienminutengemiddelden. Dit is geen gemeten elektriciteitsproductie.</aside>
     <aside class="notice" id="preview-notice" hidden>
@@ -40,6 +81,13 @@
 
     <label class="point-toggle"><input type="checkbox" id="show-points" checked> Toon tienminutenpunten · vermogen berekend uit de oorspronkelijke windgemiddelden</label>
     <label class="point-toggle"><input type="checkbox" id="wake" checked> Zogverlies meenemen · scenario: wind 5 % lager in Fryslân, 2 % in Beabuorren</label>
+    <fieldset class="alpha-controls">
+      <legend>Hoogte-exponent α in v<sub>h</sub> = v<sub>10</sub> × (h / 10)<sup>α</sup></legend>
+      <label>Fryslân <input id="alpha-fryslan" type="text" inputmode="decimal" size="5" autocomplete="off"></label>
+      <label>Beabuorren <input id="alpha-beabuorren" type="text" inputmode="decimal" size="5" autocomplete="off"></label>
+      <button id="alpha-reset" type="button">Standaard</button>
+      <small>Leeg = standaard (Fryslân per seizoen, Beabuorren 0,20); toegestaan 0 tot 0,6. Hoger α geeft meer wind op ashoogte.</small>
+    </fieldset>
     <div id="charts">
       <section class="card" id="fryslan">
         <div class="card-head">

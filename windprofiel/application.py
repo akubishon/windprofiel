@@ -56,6 +56,19 @@ def shear_exponent(park: dict, day: date) -> float:
     return park["alpha"] + park.get("alpha_seasonal", 0) * cos(phase)
 
 
+ALPHA_RANGE = (0.0, 0.6)
+
+
+def parse_alpha(text: str | None) -> float | None:
+    """Eigen hoogte-exponent uit de API (komma of punt); leeg betekent de standaard."""
+    if text is None or not text.strip():
+        return None
+    value = float(text.strip().replace(",", "."))
+    if not isfinite(value) or not ALPHA_RANGE[0] <= value <= ALPHA_RANGE[1]:
+        raise ValueError("Hoogte-exponent moet tussen 0 en 0,6 liggen.")
+    return value
+
+
 WAKE_STATUS = ("Zogverlies als vaste gemiddelde snelheidsverlaging per park: 5 % voor Fryslân, 2 % voor Beabuorren. "
                "Gekozen scenario-aannames, niet gekalibreerd en zonder windrichting of turbineopstelling.")
 
@@ -225,7 +238,8 @@ def csv_rows(profile: dict) -> list[list[str]]:
 
 
 def build_profile(day: date, stations: dict[str, str] | None = None, client: KNMIClient | None = None,
-                  wake: bool = True) -> dict:
+                  wake: bool = True, alphas: dict[str, float | None] | None = None) -> dict:
+    """Minuutprofielen voor beide parken; `alphas` vervangt per park de standaard hoogte-exponent."""
     moments = day_minutes(day)
     client = client or KNMIClient(ROOT / ".cache" / "knmi")
     features = client.locations().get("features", [])
@@ -241,7 +255,9 @@ def build_profile(day: date, stations: dict[str, str] | None = None, client: KNM
         raw = client.observations(station_id, day)
         samples = parse_wind(raw, station_id)
         wind = interpolate_minutes(samples, moments)
-        alpha = shear_exponent(park, day)
+        alpha_default = shear_exponent(park, day)
+        custom = (alphas or {}).get(park_id)
+        alpha = alpha_default if custom is None else custom
         hub = [None if v is None else v * (park["hub_height"] / 10) ** alpha for v in wind]
         curve = load_curve(park_id)
         power = [park_power_mw(v, park_id, curve, wake=wake) for v in hub]
@@ -254,7 +270,7 @@ def build_profile(day: date, stations: dict[str, str] | None = None, client: KNM
         curve_metadata = ({k: v for k, v in curve.items() if k != "points"} if curve is not None
                           else dict(FRYSLAN_SCENARIO) if park_id == "fryslan" else None)
         profiles[park_id] = {
-            **park, "alpha": alpha, "station": available[station_id], "wind_ms": wind, "hub_wind_ms": hub,
+            **park, "alpha": alpha, "alpha_default": alpha_default, "alpha_custom": custom is not None, "station": available[station_id], "wind_ms": wind, "hub_wind_ms": hub,
             "power_mw": power, "missing_wind_minutes": wind.count(None),
             "curve": curve_metadata, "reference_points": reference_points,
             **dict(zip(("energy_mwh", "energy_until"), day_energy(power, stamps, running))),
@@ -269,6 +285,9 @@ def build_profile(day: date, stations: dict[str, str] | None = None, client: KNM
     method = ("KNMI-tienminutengemiddelden, geplaatst op intervalmidden en lineair geïnterpoleerd. "
               "Geen extrapolatie of overbrugging van meetgaten. Hoogtecorrectie met een exponent per park "
               "(seizoensafhankelijk voor Fryslân); geen afregeling, stilstand of luchtdichtheidcorrectie.")
+    changed = [PARKS[key]["name"] for key in PARKS if profiles[key]["alpha_custom"]]
+    if changed:
+        method += " Eigen hoogte-exponent voor " + " en ".join(changed) + "."
     method += " " + (WAKE_STATUS if wake else "Zogverlies uitgeschakeld: alle turbines krijgen de ongestoorde wind.")
     return {"date": day.isoformat(), "timezone": "Europe/Amsterdam", "minutes": len(moments), "wake": wake,
             "timestamps": stamps, "parks": profiles,

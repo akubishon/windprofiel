@@ -195,6 +195,7 @@ function setSelection(range) {
     }
   });
   if (!current) return;
+  updateDashboard(range);
 
   [...ids, "combined"].forEach(id => {
     const box = $(id).querySelector(".range");
@@ -215,6 +216,74 @@ function setSelection(range) {
     const energy = values.reduce((sum, v) => sum + v, 0) / 60;
     text.textContent = `Selectie ${label}: ${format(energy)} MWh · ${format(energy / ratedMW(id), 2)} vollasturen`
       + ` · gemiddeld ${format(energy / (values.length / 60))} MW`;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Productieoverzicht: dag (of vandaag tot nu) of de gekozen selectie
+// ---------------------------------------------------------------------------
+
+function energyText(mwh) {
+  return mwh >= 1000 ? `${format(mwh / 1000, 2)} GWh` : `${format(mwh)} MWh`;
+}
+
+// Opbrengst, gemiddeld vermogen en piek over een tijdvak; ontbrekende data maakt de opbrengst onbekend.
+function periodStats(id, range) {
+  const series = seriesFor(id);
+  let first = 0, last = series.length - 1, energy;
+  if (range) {
+    [first, last] = [range.a, range.b];
+    const values = series.slice(first, last + 1);
+    energy = values.includes(null) ? null : values.reduce((sum, v) => sum + v, 0) / 60;
+  } else {
+    const source = id === "combined" ? current : current.parks[id];
+    energy = id === "combined" ? current.combined_energy_mwh : source.energy_mwh;
+    const until = id === "combined" ? current.combined_energy_until : source.energy_until;
+    if (until) last = current.timestamps.indexOf(until);
+  }
+  let peak = null, peakAt = null;
+  for (let i = first; i <= last; i++) {
+    if (series[i] !== null && (peak === null || series[i] > peak)) {
+      peak = series[i];
+      peakAt = current.timestamps[i];
+    }
+  }
+  const hours = (last - first + 1) / 60;
+  const mean = energy === null ? null : energy / hours;
+  return {energy, hours, mean, peak, peakAt, factor: mean === null ? null : mean / ratedMW(id)};
+}
+
+function periodLabel(range) {
+  if (range) {
+    const end = current.timestamps[range.b + 1]?.slice(11, 16) ?? "24:00";
+    return `Selectie ${current.timestamps[range.a].slice(11, 16)}–${end} · ${nlDate(current.date)}`;
+  }
+  const until = current.combined_energy_until;
+  return until ? `Vandaag tot ${until.slice(11, 16)}` : `Hele dag · ${nlDate(current.date)}`;
+}
+
+function updateDashboard(range) {
+  const tiles = $("dashboard").querySelectorAll(".tile");
+  if (!current) {
+    $("dashboard-period").textContent = "";
+    tiles.forEach(tile => {
+      tile.querySelector(".tile-value").textContent = "—";
+      tile.querySelector(".meter span").style.width = "0";
+      tile.querySelectorAll("dd").forEach(dd => dd.textContent = "—");
+    });
+    return;
+  }
+  $("dashboard-period").textContent = periodLabel(range);
+  tiles.forEach(tile => {
+    const id = tile.dataset.park;
+    const stats = periodStats(id, range);
+    const facts = Object.fromEntries([...tile.querySelectorAll("dd")].map(dd => [dd.dataset.fact, dd]));
+    tile.querySelector(".tile-value").textContent = stats.energy === null ? "onbekend" : energyText(stats.energy);
+    tile.querySelector(".meter span").style.width = `${Math.min(100, (stats.factor ?? 0) * 100)}%`;
+    facts.hours.textContent = stats.energy === null ? "—" : format(stats.energy / ratedMW(id), 1);
+    facts.mean.textContent = stats.mean === null ? "—" : `${format(stats.mean)} MW`;
+    facts.peak.textContent = stats.peak === null ? "—" : `${format(stats.peak)} MW om ${stats.peakAt.slice(11, 16)}`;
+    facts.factor.textContent = stats.factor === null ? "—" : `${format(stats.factor * 100, 0)} %`;
   });
 }
 
@@ -284,10 +353,21 @@ async function request(url, options = {}) {
   }
 }
 
+// Eigen hoogte-exponent: leeg = standaard; komma of punt; null bij een ongeldige waarde.
+function alphaInput(id) {
+  const text = $("alpha-" + id).value.trim();
+  if (!text) return "";
+  const value = Number(text.replace(",", "."));
+  return Number.isFinite(value) && value >= 0 && value <= 0.6 ? String(value) : null;
+}
+
 function parameters() {
   const params = new URLSearchParams({date: $("date").value});
   ids.forEach(id => params.set(id, $("station-" + id).value));
   params.set("wake", $("wake").checked ? "1" : "0");
+  ids.forEach(id => {
+    if (alphaInput(id)) params.set("alpha_" + id, alphaInput(id));
+  });
   return params;
 }
 
@@ -314,8 +394,13 @@ function showPark(id, data) {
   const wake = data.wake
     ? `Zogverlies: wind ${format(park.wake_deficit * 100, 0)} % lager voor alle turbines (scenario-aanname).`
     : "Zogverlies uitgeschakeld.";
-  card.querySelector(".assumptions").textContent =
-    `${park.assumptions} Hoogte-exponent deze dag: α = ${format(park.alpha, 2)}. ${wake}`;
+  const alpha = park.alpha_custom
+    ? `Hoogte-exponent: α = ${format(park.alpha, 3)} (eigen waarde; standaard deze dag ${format(park.alpha_default, 3)}).`
+    : `Hoogte-exponent deze dag: α = ${format(park.alpha, 3)}.`;
+  card.querySelector(".assumptions").textContent = `${park.assumptions} ${alpha} ${wake}`;
+  // De standaardwaarde van deze dag staat grijs in het lege veld.
+  $("alpha-" + id).placeholder = format(park.alpha_default, 3);
+  $("alpha-" + id).classList.toggle("custom", Boolean(park.alpha_custom));
 
   const source = card.querySelector(".curve-source");
   source.replaceChildren();
@@ -346,6 +431,7 @@ function clearCharts() {
   charts.querySelectorAll(".range button").forEach(el => el.hidden = true);
   charts.querySelectorAll(".plot,.windplot").forEach(el => el.replaceChildren());
   charts.querySelectorAll(".energy").forEach(el => el.textContent = "—");
+  updateDashboard(null);
 }
 
 async function load() {
@@ -354,10 +440,15 @@ async function load() {
     $("status").textContent = invalidDateMessage();
     return;
   }
+  if (ids.some(id => alphaInput(id) === null)) {
+    $("status").textContent = "Kies een hoogte-exponent α tussen 0 en 0,6 (bijvoorbeeld 0,15), of laat het veld leeg voor de standaard.";
+    return;
+  }
   const call = ++sequence;
   busy = true;
   current = null;
   controls();
+  updateDashboard(null);
   $("status").textContent = "KNMI-metingen ophalen en minuutprofiel berekenen…";
   try {
     const data = await request("/api/profile?" + parameters());
@@ -461,6 +552,7 @@ function showPreviewDays() {
     $("curve-" + id).disabled = true;
   });
   $("wake").disabled = true;
+  ["alpha-fryslan", "alpha-beabuorren", "alpha-reset"].forEach(name => $(name).disabled = true);
   Object.keys(preview.profiles).forEach(day => {
     const button = document.createElement("button");
     button.textContent = nlDate(day);
@@ -526,6 +618,11 @@ $("calendar").addEventListener("click", () => {
 $("refresh").addEventListener("click", load);
 $("export").addEventListener("click", downloadCsv);
 $("wake").addEventListener("change", load);
+ids.forEach(id => $("alpha-" + id).addEventListener("change", load));
+$("alpha-reset").addEventListener("click", () => {
+  ids.forEach(id => $("alpha-" + id).value = "");
+  load();
+});
 $("show-points").addEventListener("change", event => $("charts").classList.toggle("hide-points", !event.target.checked));
 $("charts").querySelectorAll(".range button").forEach(button => button.addEventListener("click", () => setSelection(null)));
 ids.forEach(id => {
