@@ -97,9 +97,10 @@ Standaard gebruikt Fryslân **Houtribdijk** (`0-20000-0-06258`, 5.4006° E, 52.6
 als IJsselmeerproxy; dit station sloot het best aan op productiedata (zie
 [rekenmodel, sectie 7](rekenmodel.md#7-ijking-op-productiedata-fryslân)). Stavoren
 (`0-20000-0-06267`) is dichterbij maar gaf structureel te weinig wind. Beabuorren gebruikt standaard **Stavoren** (`0-20000-0-06267`,
-5.3833° E, 52.8967° N), op verzoek van de gebruiker als meetpunt bij het park;
-eerder was dat Leeuwarden Airport (`0-20000-0-06270`). Voor Beabuorren is geen
-station geijkt op productiedata. Beide identifiers zijn afkomstig
+5.3833° E, 52.8967° N), het dichtstbijzijnde KNMI-station: 18,8 km van het park
+(53,052° N, 5,493° E, volgens [The Wind Power](https://www.thewindpower.net/windfarm_en_6263_beabuorren.php),
+"precise localization"). Leeuwarden Airport (`0-20000-0-06270`), eerder de
+standaard, ligt op 25,7 km. Voor Beabuorren is geen station geijkt op productiedata. Beide identifiers zijn afkomstig
 uit de actuele EDR-stationslijst en zijn voor de gecontroleerde dagen bruikbaar.
 Er zijn geen KNMI-metingen in de turbinegondels gebruikt. Een andere stationkeuze
 is mogelijk in de webapp; afstand, windrichting en lokale omgeving beïnvloeden
