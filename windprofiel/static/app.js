@@ -116,15 +116,19 @@ function setSelection(range) {
     text.textContent = `Selectie ${label}: ${format(energy)} MWh · ${format(energy/ratedMW(id),2)} vollasturen · gemiddeld ${format(energy/(values.length/60))} MW`;
   });
 }
-function showEnergy(element, energy, id) {
+function showEnergy(element, energy, id, until=null) {
   element.replaceChildren(document.createTextNode(energy===null?"—":`${format(energy)} MWh`));
   const small=document.createElement("small");
-  small.textContent=energy===null?"GESCHATTE DAGOPBRENGST":`${format(energy/ratedMW(id),1)} VOLLASTUREN · GESCHATTE DAGOPBRENGST`;
+  const label=until?`GESCHATTE OPBRENGST TOT ${until.slice(11,16)}`:"GESCHATTE DAGOPBRENGST";
+  small.textContent=energy===null?label:`${format(energy/ratedMW(id),1)} VOLLASTUREN · ${label}`;
   element.append(small);
 }
+function today() {
+  return new Intl.DateTimeFormat("sv-SE", {timeZone: "Europe/Amsterdam"}).format(new Date());
+}
 function controls() {
-  $("previous").disabled = busy || $("date").value <= "2025-01-01";
-  $("next").disabled = busy || $("date").value >= "2025-12-31";
+  $("previous").disabled = busy || $("date").value <= $("date").min;
+  $("next").disabled = busy || $("date").value >= $("date").max;
   $("export").disabled = busy || !current;
   $("refresh").disabled = busy;
 }
@@ -163,7 +167,7 @@ function parameters() {
   return params;
 }
 async function load() {
-  if (!$("date").checkValidity() || !$("date").value) {$("status").textContent="Kies een geldige datum in 2025.";return;}
+  if (!$("date").checkValidity() || !$("date").value) {$("status").textContent="Kies een geldige datum vanaf 1 januari 2025 tot en met vandaag.";return;}
   const call = ++sequence;
   busy = true; current = null; controls();
   $("status").textContent="KNMI-metingen ophalen en minuutprofiel berekenen…";
@@ -173,7 +177,7 @@ async function load() {
     current = data; bands = []; selection = null;
     ids.forEach(id => {
       const p = data.parks[id], card=$(id);
-      showEnergy(card.querySelector(".energy"), p.energy_mwh, id);
+      showEnergy(card.querySelector(".energy"), p.energy_mwh, id, p.energy_until);
       chart(card.querySelector(".plot"), p.power_mw, data.timestamps, "MW", p.curve?"Vermogen niet beschikbaar: geen bruikbare windmetingen.":"Vermogen nog niet beschikbaar: voeg een curve voor de juiste turbine-uitvoering toe.", "#32876c", p.reference_points.map(point=>({timestamp:point.timestamp,value:point.power_mw})), true);
       chart(card.querySelector(".windplot"), p.wind_ms, data.timestamps, "m/s op 10 m", "Geen bruikbare windmetingen.","#749caf", p.reference_points.map(point=>({timestamp:point.timestamp,value:point.wind_ms})));
       card.querySelector(".source").textContent=`KNMI ${p.station.properties.name} · ${p.missing_wind_minutes} ontbrekende windminuten`;
@@ -183,18 +187,19 @@ async function load() {
       const source=card.querySelector(".curve-source");source.replaceChildren();
       if(p.curve){source.append(document.createTextNode(p.curve.status+" "));const link=document.createElement("a");link.href=p.curve.source;link.textContent=p.curve.kind==="cubic_scenario"?"Natuurkundige achtergrond ↗":"Curvebron ↗";link.target="_blank";link.rel="noopener";source.append(link);} else source.textContent="Vermogenscurve ontbreekt; windmetingen zijn wel beschikbaar.";
     });
-    const combined=$("combined");showEnergy(combined.querySelector(".energy"),data.combined_energy_mwh,"combined");
+    const combined=$("combined");showEnergy(combined.querySelector(".energy"),data.combined_energy_mwh,"combined",data.combined_energy_until);
     chart(combined.querySelector(".plot"),data.combined_mw,data.timestamps,"MW","Gecombineerd vermogen vereist een beschikbare curve én winddata voor beide parken.","#32876c",data.combined_reference_points.map(point=>({timestamp:point.timestamp,value:point.power_mw})), true);
     setSelection(null);
     $("method").textContent=data.method;
     const missing=ids.filter(id=>!data.parks[id].curve);
-    $("status").textContent=`${data.date} · ${format(data.minutes,0)} minuten · Europe/Amsterdam. ${missing.length?"Wind opgehaald; vermogen nog onvolledig door ontbrekende curve.":"Profielen berekend."}${window.WINDPROFIEL_PREVIEW?" Opgeslagen KNMI-voorbeeld; geen live aanvraag.":""}`;
+    $("status").textContent=`${data.date} · ${format(data.minutes,0)} minuten · Europe/Amsterdam. ${missing.length?"Wind opgehaald; vermogen nog onvolledig door ontbrekende curve.":"Profielen berekend."}${data.date===today()&&!window.WINDPROFIEL_PREVIEW?" Vandaag: metingen tot nu; klik Profiel ophalen voor nieuwe metingen.":""}${window.WINDPROFIEL_PREVIEW?" Opgeslagen KNMI-voorbeeld; geen live aanvraag.":""}`;
   } catch(error) {
     if(call===sequence){$("status").textContent=error.message;$("charts").querySelectorAll(".range span").forEach(el=>el.textContent="");$("charts").querySelectorAll(".range button").forEach(el=>el.hidden=true);$("charts").querySelectorAll(".plot,.windplot").forEach(el=>el.replaceChildren());$("charts").querySelectorAll(".energy").forEach(el=>el.textContent="—");}
   } finally {if(call===sequence){busy=false;controls();}}
 }
 function moveDay(delta){const d=new Date($("date").value+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+delta);$("date").value=d.toISOString().slice(0,10);load();}
 $("previous").addEventListener("click",()=>moveDay(-1));$("next").addEventListener("click",()=>moveDay(1));
+$("date").max=today();
 $("date").addEventListener("change",load);$("refresh").addEventListener("click",load);
 $("export").addEventListener("click",async()=>{
   if(!current)return;
@@ -221,7 +226,7 @@ async function init(){
   busy=true;controls();
   $("status").textContent="KNMI-stations laden…";
   try{
-    if(location.protocol === "file:" && !window.WINDPROFIEL_PREVIEW) throw new Error("Open de zelfstandige index.html in de hoofdmap voor voorbeelden, of start python3 -m windprofiel.server voor elke dag in 2025.");
+    if(location.protocol === "file:" && !window.WINDPROFIEL_PREVIEW) throw new Error("Open de zelfstandige index.html in de hoofdmap voor voorbeelden, of start python3 -m windprofiel.server voor elke dag vanaf 2025 tot en met vandaag.");
     if(window.WINDPROFIEL_PREVIEW){
       $("preview-notice").hidden=false;
       ids.forEach(id=>{$("station-"+id).disabled=true;$("curve-"+id).disabled=true;});

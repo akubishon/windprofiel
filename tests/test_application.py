@@ -3,7 +3,7 @@ import unittest
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
-from windprofiel.application import PARKS, build_profile, shear_exponent, interpolate_minutes, parse_wind, park_power_mw, validate_curve
+from windprofiel.application import PARKS, build_profile, day_energy, shear_exponent, interpolate_minutes, parse_wind, park_power_mw, validate_curve
 from windprofiel.knmi import KNMIError
 
 
@@ -113,3 +113,13 @@ class ApplicationTests(unittest.TestCase):
         curve["points"][-1][1] = 1_300_000
         with self.assertRaises(ValueError): validate_curve(curve, "beabuorren")
         with self.assertRaises(ValueError): validate_curve([], "beabuorren")
+
+
+class DayEnergyTests(unittest.TestCase):
+    def test_running_day_counts_until_last_measurement(self):
+        stamps = ["00:00", "00:01", "00:02", "00:03"]
+        self.assertEqual(day_energy([60, 120, 60, 60], stamps, False), (5, None))
+        self.assertEqual(day_energy([60, 120, None, None], stamps, True), (3, "00:01"))
+        self.assertEqual(day_energy([60, 120, None, None], stamps, False), (None, None))
+        self.assertEqual(day_energy([60, None, 60, None], stamps, True), (None, None))
+        self.assertEqual(day_energy([None] * 4, stamps, True), (None, None))

@@ -5,11 +5,17 @@ from datetime import date, datetime, time, timedelta, timezone
 from math import isfinite
 from zoneinfo import ZoneInfo
 
+FIRST_DAY = date(2025, 1, 1)
+
+
+def today() -> date:
+    return datetime.now(ZoneInfo("Europe/Amsterdam")).date()
+
 
 def day_minutes(day: date) -> list[datetime]:
-    """UTC-tijdstippen voor elke minuut van een Nederlandse kalenderdag in 2025."""
-    if day.year != 2025:
-        raise ValueError("Kies een datum in 2025.")
+    """UTC-tijdstippen voor elke minuut van een Nederlandse kalenderdag, 2025 tot en met vandaag."""
+    if not FIRST_DAY <= day <= today():
+        raise ValueError("Kies een datum vanaf 1 januari 2025 tot en met vandaag.")
     local = ZoneInfo("Europe/Amsterdam")
     start = datetime.combine(day, time(), local).astimezone(timezone.utc)
     end = datetime.combine(day + timedelta(days=1), time(), local).astimezone(timezone.utc)

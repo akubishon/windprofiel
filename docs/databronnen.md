@@ -1,6 +1,6 @@
 # Databronnen en verificatie
 
-Doel: een kiesbare Nederlandse kalenderdag in 2025, met drie grafieken van
+Doel: een kiesbare Nederlandse kalenderdag van 1 januari 2025 tot en met vandaag, met drie grafieken van
 geschat vermogen in MW: Windpark Fryslân, Wynpark Beabuorren en de som.
 Op gewone dagen zijn er 1.440 minuutwaarden; tijdens de klokwissel 1.380 of 1.500.
 
@@ -34,7 +34,13 @@ De netwerkblokkade voor KNMI is opgelost. Primaire bronnen:
 
 Dataset: `10-minute-in-situ-meteorological-observations`, versie `1.0`.
 KNMI beschrijft een historisch archief vanaf 2012-01-01. Dit dekt volgens de
-documentatie 2025, maar is niet handmatig gevalideerd en kan onvolledig zijn.
+documentatie 2025 en verder, maar is niet handmatig gevalideerd en kan onvolledig zijn.
+Voor vandaag zijn de metingen tot circa een kwartier geleden beschikbaar. De
+opbrengst van vandaag is dan de som tot het laatste meetmoment; alleen ontbrekende
+minuten aan het eind van de lopende dag worden zo overgeslagen, een gat eerder op
+de dag maakt de opbrengst nog steeds onbekend. Antwoorden worden pas gecachet als
+het opgevraagde interval meer dan een dag voorbij is, zodat recente dagen bij
+opnieuw ophalen nieuwe metingen krijgen.
 Elke gekozen dag wordt afzonderlijk gecontroleerd op ontbrekende waarnemingen.
 De hele jaarreeks is niet in één keer gedownload of op volledigheid getoetst.
 

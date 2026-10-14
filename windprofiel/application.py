@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 from .knmi import KNMIClient, KNMIError
-from .profile import combined_mw, cubic_power_kw, day_minutes, power_kw
+from .profile import combined_mw, cubic_power_kw, day_minutes, power_kw, today
 
 ROOT = Path(__file__).resolve().parent.parent
 PARKS = {
@@ -156,6 +156,22 @@ def load_curve(park_id: str) -> dict | None:
     return validate_curve(json.loads(path.read_text()), park_id) if path.exists() else None
 
 
+def day_energy(power: list[float | None], timestamps: list[str], running: bool) -> tuple[float | None, str | None]:
+    """Dagopbrengst in MWh; voor vandaag de opbrengst tot het laatste meetmoment.
+
+    Alleen ontbrekende minuten aan het eind van een lopende dag worden genegeerd;
+    een gat eerder op de dag maakt de opbrengst onbekend.
+    """
+    if None not in power:
+        return sum(power) / 60, None
+    known = len(power)
+    while known and power[known - 1] is None:
+        known -= 1
+    if not running or not known or None in power[:known]:
+        return None, None
+    return sum(power[:known]) / 60, timestamps[known - 1]
+
+
 def build_profile(day: date, stations: dict[str, str] | None = None, client: KNMIClient | None = None,
                   wake: bool = True) -> dict:
     moments = day_minutes(day)
@@ -164,6 +180,8 @@ def build_profile(day: date, stations: dict[str, str] | None = None, client: KNM
     available = {f["id"]: f for f in features}
     profiles = {}
     local = ZoneInfo("Europe/Amsterdam")
+    stamps = [t.astimezone(local).isoformat() for t in moments]
+    running = day == today()
     for park_id, park in PARKS.items():
         station_id = (stations or {}).get(park_id) or park["station"]
         if station_id not in available:
@@ -187,7 +205,7 @@ def build_profile(day: date, stations: dict[str, str] | None = None, client: KNM
             **park, "alpha": alpha, "station": available[station_id], "wind_ms": wind, "hub_wind_ms": hub,
             "power_mw": power, "missing_wind_minutes": wind.count(None),
             "curve": curve_metadata, "reference_points": reference_points,
-            "energy_mwh": sum(power) / 60 if None not in power else None,
+            **dict(zip(("energy_mwh", "energy_until"), day_energy(power, stamps, running))),
             "observations": [{"interval_end": (t + timedelta(minutes=5)).isoformat(), "wind_ms": v} for t, v in samples],
         }
     combined = combined_mw(profiles["fryslan"]["power_mw"], profiles["beabuorren"]["power_mw"])
@@ -199,7 +217,7 @@ def build_profile(day: date, stations: dict[str, str] | None = None, client: KNM
     method = "KNMI-tienminutengemiddelden, geplaatst op intervalmidden en lineair geïnterpoleerd. Geen extrapolatie of overbrugging van meetgaten. Hoogtecorrectie met vaste exponent; geen afregeling, stilstand of luchtdichtheidcorrectie."
     method += " " + (WAKE_STATUS if wake else "Zogverlies uitgeschakeld: alle turbines krijgen de ongestoorde wind.")
     return {"date": day.isoformat(), "timezone": "Europe/Amsterdam", "minutes": len(moments), "wake": wake,
-            "timestamps": [t.astimezone(local).isoformat() for t in moments], "parks": profiles,
+            "timestamps": stamps, "parks": profiles,
             "combined_mw": combined, "combined_reference_points": combined_points,
-            "combined_energy_mwh": sum(combined) / 60 if None not in combined else None,
+            **dict(zip(("combined_energy_mwh", "combined_energy_until"), day_energy(combined, stamps, running))),
             "method": method}
