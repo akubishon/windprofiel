@@ -39,7 +39,7 @@ function today() {
 }
 
 function invalidDateMessage() {
-  return `Kies een geldige datum (dd-mm-jjjj) van 01-01-2025 tot en met ${nlDate(today())}.`;
+  return `Kies een geldige datum (dd-mm-jjjj) van 01-11-2021 tot en met ${nlDate(today())}.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -587,7 +587,7 @@ async function init() {
   try {
     if (location.protocol === "file:" && !preview) {
       throw new Error("Open de zelfstandige index.html in de hoofdmap voor voorbeelden, "
-        + "of start python3 -m windprofiel.server voor elke dag vanaf 2025 tot en met vandaag.");
+        + "of start python3 -m windprofiel.server voor elke dag vanaf 01-11-2021 tot en met vandaag.");
     }
     if (preview) showPreviewDays();
     fillStations(await request("/api/stations"));
