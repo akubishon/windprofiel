@@ -69,11 +69,33 @@ function controls() {
   $("export").disabled = busy || !current;
   $("refresh").disabled = busy;
 }
-async function request(url, options) {
-  const response = await fetch(url, options);
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Ophalen mislukt.");
-  return data;
+async function request(url, options = {}) {
+  const preview = window.WINDPROFIEL_PREVIEW;
+  if(preview) {
+    if(options.method && options.method !== "GET") throw new Error("Een voorbeeldpagina kan geen curves opslaan. Gebruik daarvoor de Python-webserver.");
+    const target = new URL(url, "http://example.invalid");
+    const first = Object.values(preview.profiles)[0];
+    if(target.pathname === "/api/stations") return {stations:ids.map(id=>first.parks[id].station), parks:Object.fromEntries(ids.map(id=>[id,{station:first.parks[id].station.id}]))};
+    const data = preview.profiles[target.searchParams.get("date")];
+    if(!data) throw new Error(`Deze zelfstandige voorbeeldpagina bevat ${Object.keys(preview.profiles).join(", ")}. Start de Python-server om andere dagen uit KNMI op te halen.`);
+    return data;
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), 25000);
+  try {
+    // Relatieve paden werken ook wanneer de app onder een URL-prefix staat.
+    const response = await fetch(url.replace(/^\//,""), {...options, signal:controller.signal});
+    if (!response.headers.get("Content-Type")?.includes("application/json")) {
+      throw new Error("Deze pagina bereikt de Python-API niet. Start python3 -m windprofiel.server vanuit de checkout. Een losse HTML-pagina of GitHub Pages voert de KNMI-server niet uit.");
+    }
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Ophalen mislukt.");
+    return data;
+  } catch(error) {
+    if(error.name === "AbortError") throw new Error("Ophalen duurt langer dan 25 seconden. Controleer de server en KNMI-toegang en probeer opnieuw.");
+    if(error instanceof TypeError) throw new Error("De webserver is niet bereikbaar. Start python3 -m windprofiel.server en open de app via die server.");
+    throw error;
+  } finally {clearTimeout(timer);}
 }
 function parameters() {
   const params = new URLSearchParams({date: $("date").value});
@@ -105,7 +127,7 @@ async function load() {
     chart(combined.querySelector(".plot"),data.combined_mw,data.timestamps,"MW","Gecombineerd vermogen vereist een beschikbare curve én winddata voor beide parken.","#32876c",data.combined_reference_points.map(point=>({timestamp:point.timestamp,value:point.power_mw})));
     $("method").textContent=data.method;
     const missing=ids.filter(id=>!data.parks[id].curve);
-    $("status").textContent=`${data.date} · ${format(data.minutes,0)} minuten · Europe/Amsterdam. ${missing.length?"Wind opgehaald; vermogen nog onvolledig door ontbrekende curve.":"Profielen berekend."}`;
+    $("status").textContent=`${data.date} · ${format(data.minutes,0)} minuten · Europe/Amsterdam. ${missing.length?"Wind opgehaald; vermogen nog onvolledig door ontbrekende curve.":"Profielen berekend."}${window.WINDPROFIEL_PREVIEW?" Opgeslagen KNMI-voorbeeld; geen live aanvraag.":""}`;
   } catch(error) {
     if(call===sequence){$("status").textContent=error.message;$("charts").querySelectorAll(".plot,.windplot").forEach(el=>el.replaceChildren());$("charts").querySelectorAll(".energy").forEach(el=>el.textContent="—");}
   } finally {if(call===sequence){busy=false;controls();}}
@@ -135,12 +157,25 @@ ids.forEach(id=>{
   });
 });
 async function init(){
+  busy=true;controls();
+  $("status").textContent="KNMI-stations laden…";
   try{
+    if(location.protocol === "file:" && !window.WINDPROFIEL_PREVIEW) throw new Error("Open de zelfstandige index.html in de hoofdmap voor voorbeelden, of start python3 -m windprofiel.server voor elke dag in 2025.");
+    if(window.WINDPROFIEL_PREVIEW){
+      $("preview-notice").hidden=false;
+      ids.forEach(id=>{$("station-"+id).disabled=true;$("curve-"+id).disabled=true;});
+      Object.keys(window.WINDPROFIEL_PREVIEW.profiles).forEach(day=>{
+        const button=document.createElement("button");button.textContent=day;
+        button.addEventListener("click",()=>{$("date").value=day;load();});
+        $("preview-days").append(button);
+      });
+    }
     const data=await request("/api/stations");
     const stations=data.stations.filter(s=>s.geometry?.coordinates?.[1]>50).sort((a,b)=>a.properties.name.localeCompare(b.properties.name));
     ids.forEach(id=>{const select=$("station-"+id);stations.forEach(s=>{const option=document.createElement("option");option.value=s.id;option.textContent=`${s.properties.name} (${s.properties.wmoId})`;select.append(option);});select.value=data.parks[id].station;});
     await load();
   }catch(error){$("status").textContent=error.message;}
+  finally{busy=false;controls();}
 }
 controls();init();
 $("show-points").addEventListener("change",event=>$("charts").classList.toggle("hide-points",!event.target.checked));

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Windprofiel · Fryslân & Beabuorren</title>
-  <link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+  <link rel="stylesheet" href="./style.css"><script src="./app.js" defer></script>
 </head>
 <body>
   <main>
@@ -16,8 +16,10 @@
         <button id="next" aria-label="Volgende dag">→</button></div></div>
       <button id="refresh">Profiel ophalen</button><button id="export" disabled>Download CSV</button>
     </section>
-    <p id="status" role="status" aria-live="polite">KNMI-stations laden…</p>
+    <p id="status" role="status" aria-live="polite">App starten… Geen verandering? Start de Python-webserver zoals beschreven in de README.</p>
+    <noscript>Schakel JavaScript in om de KNMI-data en grafieken te laden.</noscript>
     <aside class="notice">Minuutwaarden zijn schattingen uit tienminutengemiddelden. Dit is geen gemeten elektriciteitsproductie.</aside>
+    <aside class="notice" id="preview-notice" hidden>Zelfstandige voorbeeldpagina met opgeslagen echte KNMI-data. Deze pagina bevat de onderstaande dagen en gebruikt de standaardstations. Voor andere dagen, stations of curve-upload start je de Python-webserver volgens de README.<div id="preview-days"></div></aside>
     <label class="point-toggle"><input type="checkbox" id="show-points" checked> Toon tienminutenpunten · vermogen berekend uit de oorspronkelijke windgemiddelden</label>
     <div id="charts">
       <section class="card" id="fryslan"><div class="card-head"><div><span class="eyebrow">89 TURBINES · 382,7 MW</span><h2>Windpark Fryslân</h2></div><div class="energy">—</div></div><div class="plot"></div><div class="source"></div><details><summary>Wind en modelaannames</summary><div class="windplot"></div><p class="assumptions"></p><p class="curve-source"></p></details></section>

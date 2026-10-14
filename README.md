@@ -5,6 +5,22 @@ panelen: Windpark Fryslân, Wynpark Beabuorren en hun gecombineerde vermogen.
 
 ## Starten
 
+**Direct bekijken in Codex:** open [index.html](index.html) in de hoofdmap.
+Dit is een zelfstandige pagina met drie opgeslagen echte KNMI-dagen:
+15 januari, 30 maart en 26 oktober 2025. Grafieken, bronnen en CSV werken zonder
+Python-server of API-sleutel. Andere dagen ophalen en stations of curves aanpassen
+kan alleen via de Python-webapp hieronder. Open daarvoor niet het losse bestand
+`windprofiel/static/index.html`: dat is uitsluitend de template van de server.
+
+De zelfstandige pagina opnieuw maken (met werkende KNMI-binding):
+
+```sh
+python3 -m windprofiel.preview
+```
+
+Met `--dates 2025-06-01 2025-06-02 --output voorbeeld.html` kun je andere echte
+dagen bundelen. De HTML bevat winddata en modeluitkomsten, nooit de API-sleutel.
+
 Python 3.12 of nieuwer met de standaardbibliotheek is voldoende; er zijn geen
 externe pakketten nodig. Configureer `KNMI_EDR_API_KEY` via de beveiligde
 omgevingsinstellingen voor `api.dataplatform.knmi.nl`. De app houdt de sleutel
