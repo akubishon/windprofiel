@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from .application import PARKS, ROOT, build_profile, validate_curve
-from .knmi import KNMIClient, KNMIError
+from .knmi import KNMIClient, KNMIError, load_env_file
 
 STATIC = Path(__file__).parent / "static"
 
@@ -94,6 +94,7 @@ def main():
     parser = argparse.ArgumentParser(description="Start de Windprofiel-webapp.")
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
+    load_env_file(ROOT / ".env")
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     print(f"Windprofiel luistert lokaal op poort {args.port}.", flush=True)
     try:
