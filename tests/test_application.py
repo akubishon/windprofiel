@@ -24,6 +24,21 @@ class ApplicationTests(unittest.TestCase):
         curve = {"points": [(3, 0), (14, 4300)], "cut_out": 25}
         self.assertLess(park_power_mw(12, "fryslan", curve), 382.7)
 
+    def test_wake_reduces_partial_load_but_not_cut_in_cut_out_or_plateau(self):
+        free = park_power_mw(8, "fryslan", None)
+        self.assertAlmostEqual(park_power_mw(8, "fryslan", None, wake=True),
+                               park_power_mw(8 * 0.95, "fryslan", None))
+        self.assertLess(park_power_mw(8, "fryslan", None, wake=True), free)
+        self.assertEqual(park_power_mw(14, "fryslan", None, wake=True), 382.7)
+        self.assertEqual(park_power_mw(25.5, "fryslan", None, wake=True), 0)
+        self.assertEqual(park_power_mw(2.9, "fryslan", None, wake=True), 0)
+        self.assertEqual(park_power_mw(3.05, "fryslan", None, wake=True), 0)
+        self.assertIsNone(park_power_mw(None, "fryslan", None, wake=True))
+        curve = {"points": [(3, 0), (14, 1300)], "cut_out": 25}
+        self.assertAlmostEqual(park_power_mw(10, "beabuorren", curve, wake=True),
+                               park_power_mw(9.8, "beabuorren", curve))
+        self.assertEqual(park_power_mw(24.9, "beabuorren", curve, wake=True), 10.4)
+
     def test_combined_profile_reference_times_and_missing_wind(self):
         class Client:
             def locations(self):
@@ -41,6 +56,22 @@ class ApplicationTests(unittest.TestCase):
         self.assertEqual([p["timestamp"] for p in points], ["2025-01-01T00:55:00+01:00", "2025-01-01T01:05:00+01:00", "2025-01-01T01:15:00+01:00"])
         self.assertIsNone(points[1]["power_mw"])
         self.assertTrue(all(p["power_mw"] is None for p in profile["combined_reference_points"]))
+
+    def test_profile_wake_switch(self):
+        class Client:
+            def locations(self):
+                return {"features": [{"id": p["station"], "properties": {"name": k}} for k,p in PARKS.items()]}
+            def observations(self, station, day):
+                data = payload([8, 8, 8])
+                data["coverages"][0]["eumetnet:locationId"] = station
+                return data
+        with patch("windprofiel.application.load_curve", return_value=None):
+            on = build_profile(date(2025,1,1), client=Client())
+            off = build_profile(date(2025,1,1), client=Client(), wake=False)
+        self.assertTrue(on["wake"]); self.assertFalse(off["wake"])
+        index = on["parks"]["fryslan"]["wind_ms"].index(8)
+        self.assertLess(on["parks"]["fryslan"]["power_mw"][index], off["parks"]["fryslan"]["power_mw"][index])
+        self.assertIn("Zogverlies uitgeschakeld", off["method"])
 
     def test_interval_midpoint_and_wind_interpolation(self):
         observations = parse_wind(payload([2, 4, 8]), "station")

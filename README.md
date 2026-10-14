@@ -54,7 +54,10 @@ Onder 3 m/s is het vermogen nul, van 11,5 tot en met 25 m/s 4.300 kW, boven
 25 m/s nul. De drie snelheidgrenzen zijn gekozen scenario-aannames, geen
 bevestigde turbinespecificaties. Alle drie de grafieken tonen nu geschat vermogen.
 Stippen markeren berekeningen uit oorspronkelijke tienminutengemiddelden; de
-minuutlijn ertussen is interpolatie. Zie [formules en bronnen](docs/rekenmodel.md).
+minuutlijn ertussen is interpolatie. Zogverlies is standaard benaderd met een
+vaste windverlaging van 5 % (Fryslân) en 2 % (Beabuorren); dat zijn
+scenario-aannames zonder windrichting, uit te zetten met een vinkje of `wake=0`.
+Zie [formules en bronnen](docs/rekenmodel.md).
 Een geüploade passende Fryslân-curve krijgt voorrang op dit model.
 
 Een curve kan via de webapp als JSON worden toegevoegd. Formaat: `model` moet

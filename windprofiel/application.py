@@ -14,10 +14,10 @@ from .profile import combined_mw, cubic_power_kw, day_minutes, power_kw
 ROOT = Path(__file__).resolve().parent.parent
 PARKS = {
     "fryslan": {"name": "Windpark Fryslân", "model": "Siemens Gamesa SWT-DD-130", "count": 89,
-                "rated_kw": 4300, "hub_height": 115, "alpha": 0.10, "station": "0-20000-0-06267",
+                "rated_kw": 4300, "hub_height": 115, "alpha": 0.10, "wake_deficit": 0.05, "station": "0-20000-0-06267",
                 "assumptions": "115 m ashoogte afgeleid uit tiphoogte en rotordiameter; exponent 0,10 is een water-aanname. Stavoren is een nabijgelegen kuststation, geen parkmeting."},
     "beabuorren": {"name": "Wynpark Beabuorren", "model": "Siemens SWT-1.3-62", "count": 8,
-                   "rated_kw": 1300, "hub_height": 60, "alpha": 0.20, "station": "0-20000-0-06270",
+                   "rated_kw": 1300, "hub_height": 60, "alpha": 0.20, "wake_deficit": 0.02, "station": "0-20000-0-06270",
                    "assumptions": "60 m ashoogte uit historisch lokaal nieuws, nog te bevestigen voor alle turbines; exponent 0,20 is een land-aanname. Leeuwarden is een regionaal landstation, geen parkmeting."},
 }
 FRYSLAN_SCENARIO = {
@@ -28,16 +28,31 @@ FRYSLAN_SCENARIO = {
 }
 
 
-def park_power_mw(speed: float | None, park_id: str, curve: dict | None) -> float | None:
+WAKE_STATUS = ("Zogverlies als vaste gemiddelde snelheidsverlaging per park: 5 % voor Fryslân, 2 % voor Beabuorren. "
+               "Gekozen scenario-aannames, niet gekalibreerd en zonder windrichting of turbineopstelling.")
+
+
+def turbine_kw(speed: float, park_id: str, curve: dict | None) -> float | None:
+    if curve is not None:
+        return power_kw(speed, curve["points"], cut_out=curve["cut_out"])
+    if park_id == "fryslan":
+        return cubic_power_kw(speed, **{k: FRYSLAN_SCENARIO[k] for k in ("rated_kw", "cut_in", "rated_speed", "cut_out")})
+    return None
+
+
+def park_power_mw(speed: float | None, park_id: str, curve: dict | None, *, wake: bool = False) -> float | None:
+    """Parkvermogen; met zogverlies krijgt elke turbine de parkgemiddelde verlaagde wind.
+
+    Uitschakeling volgt de ongestoorde wind: is die buiten bereik, dan blijft het vermogen nul.
+    """
     if speed is None:
         return None
     park = PARKS[park_id]
-    if curve is not None:
-        kw = power_kw(speed, curve["points"], cut_out=curve["cut_out"])
-    elif park_id == "fryslan":
-        kw = cubic_power_kw(speed, **{k: FRYSLAN_SCENARIO[k] for k in ("rated_kw", "cut_in", "rated_speed", "cut_out")})
-    else:
+    kw = turbine_kw(speed, park_id, curve)
+    if kw is None:
         return None
+    if wake and kw > 0:
+        kw = turbine_kw(speed * (1 - park["wake_deficit"]), park_id, curve)
     return kw * park["count"] / 1000
 
 
@@ -135,7 +150,8 @@ def load_curve(park_id: str) -> dict | None:
     return validate_curve(json.loads(path.read_text()), park_id) if path.exists() else None
 
 
-def build_profile(day: date, stations: dict[str, str] | None = None, client: KNMIClient | None = None) -> dict:
+def build_profile(day: date, stations: dict[str, str] | None = None, client: KNMIClient | None = None,
+                  wake: bool = True) -> dict:
     moments = day_minutes(day)
     client = client or KNMIClient(ROOT / ".cache" / "knmi")
     features = client.locations().get("features", [])
@@ -151,13 +167,13 @@ def build_profile(day: date, stations: dict[str, str] | None = None, client: KNM
         wind = interpolate_minutes(samples, moments)
         hub = [None if v is None else v * (park["hub_height"] / 10) ** park["alpha"] for v in wind]
         curve = load_curve(park_id)
-        power = [park_power_mw(v, park_id, curve) for v in hub]
+        power = [park_power_mw(v, park_id, curve, wake=wake) for v in hub]
         reference_points = []
         for t, value in samples:
             if moments[0] <= t < moments[-1] + timedelta(minutes=1):
                 aswind = None if value is None else value * (park["hub_height"] / 10) ** park["alpha"]
                 reference_points.append({"timestamp": t.astimezone(local).isoformat(), "wind_ms": value,
-                                         "power_mw": park_power_mw(aswind, park_id, curve)})
+                                         "power_mw": park_power_mw(aswind, park_id, curve, wake=wake)})
         curve_metadata = ({k: v for k, v in curve.items() if k != "points"} if curve is not None
                           else dict(FRYSLAN_SCENARIO) if park_id == "fryslan" else None)
         profiles[park_id] = {
@@ -173,8 +189,10 @@ def build_profile(day: date, stations: dict[str, str] | None = None, client: KNM
     for stamp in sorted(set(references[0]) | set(references[1]), key=datetime.fromisoformat):
         a, b = references[0].get(stamp), references[1].get(stamp)
         combined_points.append({"timestamp": stamp, "power_mw": None if a is None or b is None else a + b})
-    return {"date": day.isoformat(), "timezone": "Europe/Amsterdam", "minutes": len(moments),
+    method = "KNMI-tienminutengemiddelden, geplaatst op intervalmidden en lineair geïnterpoleerd. Geen extrapolatie of overbrugging van meetgaten. Hoogtecorrectie met vaste exponent; geen afregeling, stilstand of luchtdichtheidcorrectie."
+    method += " " + (WAKE_STATUS if wake else "Zogverlies uitgeschakeld: alle turbines krijgen de ongestoorde wind.")
+    return {"date": day.isoformat(), "timezone": "Europe/Amsterdam", "minutes": len(moments), "wake": wake,
             "timestamps": [t.astimezone(local).isoformat() for t in moments], "parks": profiles,
             "combined_mw": combined, "combined_reference_points": combined_points,
             "combined_energy_mwh": sum(combined) / 60 if None not in combined else None,
-            "method": "KNMI-tienminutengemiddelden, geplaatst op intervalmidden en lineair geïnterpoleerd. Geen extrapolatie of overbrugging van meetgaten. Hoogtecorrectie met vaste exponent; geen zogverlies, afregeling, stilstand of luchtdichtheidcorrectie."}
+            "method": method}

@@ -95,12 +95,40 @@ E_\mathrm{dag}[\mathrm{MWh}]\approx\sum_t\frac{P_\mathrm{minuut}(t)[\mathrm{MW}]
 \]
 
 `N` is 89 voor Fryslân en 8 voor Beabuorren. Elke minuut duurt 1/60 uur. Alle
-turbines van een park krijgen dezelfde modelwind. Zogverlies, stilstand,
+turbines van een park krijgen dezelfde modelwind; zogverlies staat in sectie 5. Stilstand,
 afregeling, luchtdichtheidcorrectie en individuele turbineverschillen zijn
 niet meegenomen. Een ontbrekende minuut in een park maakt de volledige
 dagopbrengst onbekend; ontbrekende productie wordt nooit als nul opgeteld.
 
-## 5. Tijd en zichtbare punten
+## 5. Zogverlies
+
+Turbines in het zog van andere turbines vangen tragere en turbulentere wind.
+Standaard benaderen we dat met één parkgemiddelde snelheidsverlaging `d`:
+
+\[
+v_\mathrm{eff}=v_h(1-d),\qquad
+P_\mathrm{turbine}=\begin{cases}
+P(v_\mathrm{eff}) & P(v_h)>0\\
+0 & \text{anders}
+\end{cases}
+\]
+
+Fryslân gebruikt `d = 0,05` (89 turbines dicht bij elkaar), Beabuorren
+`d = 0,02` (8 turbines). Via de vermogenscurve is het verlies vanzelf het
+grootst in de aanloop en klein of nul bij harde wind: bij `v_h = 8 m/s` geeft
+5 % minder wind in het Fryslân-model circa 15 % minder vermogen, vanaf
+`v_h ≈ 12,1 m/s` niets meer. In- en uitschakelen volgt de ongestoorde wind
+`v_h`, zodat het zog de cut-out niet verschuift.
+
+**0,05 en 0,02 zijn gekozen scenario-aannames, niet gekalibreerd op
+productiedata of een zogmodel.** Het model negeert windrichting en
+turbineopstelling. In werkelijkheid is het verlies veel groter als de wind
+langs een rij turbines waait, en vangen de voorste turbines de volle wind. Een
+richtingsafhankelijk model, zoals het Jensen/Park-model, vereist geverifieerde
+turbineposities; die zijn nog niet opgenomen. Met het vinkje **Zogverlies
+meenemen** of `wake=0` in de API wordt de correctie uitgeschakeld.
+
+## 6. Tijd en zichtbare punten
 
 \[
 v(t)=v_0+(v_1-v_0)\frac{t-t_0}{t_1-t_0}
@@ -139,3 +167,4 @@ voorspellen.
 | Beabuorren-model | SWT-1.3-62 | [The Wind Power](https://www.thewindpower.net/windfarm_en_6263_beabuorren.php), secundaire bron |
 | Beabuorren-ashoogte | 60 m | [Lokaal bericht uit 2007](https://tsjerkwert.nl/start-opschaling-van-het-wynpark/); niet bevestigd voor alle acht turbines |
 | Beabuorren-curve | Numerieke grafiekpunten, cut-out 25 m/s | [Wind-Turbine-Models](https://en.wind-turbine-models.com/turbines/1457-siemens-swt-1-3-62), secundaire bron |
+| Zogverlies | 5 % Fryslân / 2 % Beabuorren minder wind | Onze scenario-keuze; niet gekalibreerd, geen windrichting of opstelling |

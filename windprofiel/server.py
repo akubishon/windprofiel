@@ -47,7 +47,7 @@ class Handler(BaseHTTPRequestHandler):
             query = parse_qs(request.query)
             selected = date.fromisoformat(query.get("date", [""])[0])
             stations = {key: query.get(key, [park["station"]])[0] for key, park in PARKS.items()}
-            profile = build_profile(selected, stations)
+            profile = build_profile(selected, stations, wake=query.get("wake", ["1"])[0] != "0")
             if request.path == "/api/profile":
                 self.json_response(200, profile)
                 return
