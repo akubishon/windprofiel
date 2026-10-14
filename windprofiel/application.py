@@ -3,7 +3,7 @@
 import json
 from bisect import bisect_left
 from datetime import date, datetime, timedelta, timezone
-from math import isfinite
+from math import cos, isfinite, pi
 from pathlib import Path
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
@@ -14,8 +14,8 @@ from .profile import combined_mw, cubic_power_kw, day_minutes, power_kw
 ROOT = Path(__file__).resolve().parent.parent
 PARKS = {
     "fryslan": {"name": "Windpark Fryslân", "model": "Siemens Gamesa SWT-DD-130", "count": 89,
-                "rated_kw": 4300, "hub_height": 115, "alpha": 0.18, "wake_deficit": 0.05, "station": "0-20000-0-06258",
-                "assumptions": "115 m ashoogte afgeleid uit tiphoogte en rotordiameter; exponent 0,18 en station Houtribdijk zijn geijkt op vier productiedagen (dec. 2025), geen parkmeting."},
+                "rated_kw": 4300, "hub_height": 115, "alpha": 0.115, "alpha_seasonal": 0.065, "wake_deficit": 0.05, "station": "0-20000-0-06258",
+                "assumptions": "115 m ashoogte afgeleid uit tiphoogte en rotordiameter; seizoensexponent (circa 0,18 in de winter, 0,05 in de zomer) en station Houtribdijk zijn geijkt op productiedagen uit 2025, geen parkmeting."},
     "beabuorren": {"name": "Wynpark Beabuorren", "model": "Siemens SWT-1.3-62", "count": 8,
                    "rated_kw": 1300, "hub_height": 60, "alpha": 0.20, "wake_deficit": 0.02, "station": "0-20000-0-06270",
                    "assumptions": "60 m ashoogte uit historisch lokaal nieuws, nog te bevestigen voor alle turbines; exponent 0,20 is een land-aanname. Leeuwarden is een regionaal landstation, geen parkmeting."},
@@ -26,6 +26,12 @@ FRYSLAN_SCENARIO = {
     "source": "https://windexchange.energy.gov/small-wind-guidebook",
     "status": "Benaderd kubisch scenario, geen fabrikantcurve. 3 / 11,5 / 25 m/s zijn gekozen modelaannames, geen bevestigde turbinespecificaties.",
 }
+
+
+def shear_exponent(park: dict, day: date) -> float:
+    """Hoogte-exponent; met alpha_seasonal hoogst begin januari en laagst begin juli."""
+    phase = 2 * pi * (day.timetuple().tm_yday - 1) / 365
+    return park["alpha"] + park.get("alpha_seasonal", 0) * cos(phase)
 
 
 WAKE_STATUS = ("Zogverlies als vaste gemiddelde snelheidsverlaging per park: 5 % voor Fryslân, 2 % voor Beabuorren. "
@@ -165,19 +171,20 @@ def build_profile(day: date, stations: dict[str, str] | None = None, client: KNM
         raw = client.observations(station_id, day)
         samples = parse_wind(raw, station_id)
         wind = interpolate_minutes(samples, moments)
-        hub = [None if v is None else v * (park["hub_height"] / 10) ** park["alpha"] for v in wind]
+        alpha = shear_exponent(park, day)
+        hub = [None if v is None else v * (park["hub_height"] / 10) ** alpha for v in wind]
         curve = load_curve(park_id)
         power = [park_power_mw(v, park_id, curve, wake=wake) for v in hub]
         reference_points = []
         for t, value in samples:
             if moments[0] <= t < moments[-1] + timedelta(minutes=1):
-                aswind = None if value is None else value * (park["hub_height"] / 10) ** park["alpha"]
+                aswind = None if value is None else value * (park["hub_height"] / 10) ** alpha
                 reference_points.append({"timestamp": t.astimezone(local).isoformat(), "wind_ms": value,
                                          "power_mw": park_power_mw(aswind, park_id, curve, wake=wake)})
         curve_metadata = ({k: v for k, v in curve.items() if k != "points"} if curve is not None
                           else dict(FRYSLAN_SCENARIO) if park_id == "fryslan" else None)
         profiles[park_id] = {
-            **park, "station": available[station_id], "wind_ms": wind, "hub_wind_ms": hub,
+            **park, "alpha": alpha, "station": available[station_id], "wind_ms": wind, "hub_wind_ms": hub,
             "power_mw": power, "missing_wind_minutes": wind.count(None),
             "curve": curve_metadata, "reference_points": reference_points,
             "energy_mwh": sum(power) / 60 if None not in power else None,

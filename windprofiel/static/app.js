@@ -122,7 +122,7 @@ async function load() {
       card.querySelector(".source").textContent=`KNMI ${p.station.properties.name} · ${p.missing_wind_minutes} ontbrekende windminuten`;
       // Opgeslagen voorbeeldprofielen liggen vast; het vinkje toont hun instelling.
       if(window.WINDPROFIEL_PREVIEW) $("wake").checked=Boolean(data.wake);
-      card.querySelector(".assumptions").textContent=`${p.assumptions} ${data.wake?`Zogverlies: wind ${format(p.wake_deficit*100,0)} % lager voor alle turbines (scenario-aanname).`:"Zogverlies uitgeschakeld."}`;
+      card.querySelector(".assumptions").textContent=`${p.assumptions} Hoogte-exponent deze dag: α = ${format(p.alpha,2)}. ${data.wake?`Zogverlies: wind ${format(p.wake_deficit*100,0)} % lager voor alle turbines (scenario-aanname).`:"Zogverlies uitgeschakeld."}`;
       const source=card.querySelector(".curve-source");source.replaceChildren();
       if(p.curve){source.append(document.createTextNode(p.curve.status+" "));const link=document.createElement("a");link.href=p.curve.source;link.textContent=p.curve.kind==="cubic_scenario"?"Natuurkundige achtergrond ↗":"Curvebron ↗";link.target="_blank";link.rel="noopener";source.append(link);} else source.textContent="Vermogenscurve ontbreekt; windmetingen zijn wel beschikbaar.";
     });

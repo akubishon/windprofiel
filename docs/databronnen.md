@@ -97,9 +97,9 @@ Er zijn geen KNMI-metingen in de turbinegondels gebruikt. Een andere stationkeuz
 is mogelijk in de webapp; afstand, windrichting en lokale omgeving beïnvloeden
 de representativiteit. Een geografisch dichtbij station garandeert geen parkmeting.
 
-Aswind wordt geschat met `v_h = v_10 * (h / 10)^alpha`. De exponent 0,18
-voor Fryslân is geijkt op vier productiedagen; 0,20 voor land is een scenario-
-aanname. Geen van beide is een door KNMI gemeten lokaal verticaal profiel. De UI toont deze aannames. De
+Aswind wordt geschat met `v_h = v_10 * (h / 10)^alpha`. De exponent voor
+Fryslân volgt een seizoensformule (0,18 in de winter, 0,05 in de zomer), geijkt
+op zes productiedagen; 0,20 voor land is een scenario-aanname. Geen van beide is een door KNMI gemeten lokaal verticaal profiel. De UI toont deze aannames. De
 vermogensberekening interpoleert de curve op de geschatte aswind, vermenigvuldigt
 met het turbinaantal en rekent kW om naar MW. Zogverlies is standaard benaderd
 met een vaste snelheidsverlaging per park (zie [rekenmodel](rekenmodel.md#5-zogverlies));

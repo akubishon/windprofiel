@@ -3,7 +3,7 @@ import unittest
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
-from windprofiel.application import PARKS, build_profile, interpolate_minutes, parse_wind, park_power_mw, validate_curve
+from windprofiel.application import PARKS, build_profile, shear_exponent, interpolate_minutes, parse_wind, park_power_mw, validate_curve
 from windprofiel.knmi import KNMIError
 
 
@@ -56,6 +56,12 @@ class ApplicationTests(unittest.TestCase):
         self.assertEqual([p["timestamp"] for p in points], ["2025-01-01T00:55:00+01:00", "2025-01-01T01:05:00+01:00", "2025-01-01T01:15:00+01:00"])
         self.assertIsNone(points[1]["power_mw"])
         self.assertTrue(all(p["power_mw"] is None for p in profile["combined_reference_points"]))
+
+    def test_seasonal_shear_exponent(self):
+        fryslan, beabuorren = PARKS["fryslan"], PARKS["beabuorren"]
+        self.assertAlmostEqual(shear_exponent(fryslan, date(2025, 1, 1)), 0.18)
+        self.assertAlmostEqual(shear_exponent(fryslan, date(2025, 7, 2)), 0.05, places=3)
+        self.assertEqual(shear_exponent(beabuorren, date(2025, 7, 2)), 0.20)
 
     def test_profile_wake_switch(self):
         class Client:
