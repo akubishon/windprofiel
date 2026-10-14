@@ -10,6 +10,10 @@ externe pakketten nodig. Configureer `KNMI_EDR_API_KEY` via de beveiligde
 omgevingsinstellingen voor `api.dataplatform.knmi.nl`. De app houdt de sleutel
 op de server, buiten de browser en de repository.
 
+Lokaal kan de sleutel ook in een `.env`-bestand in de projectmap staan:
+`cp .env.example .env` en vul `KNMI_EDR_API_KEY=` aan. `.env` staat in
+`.gitignore`; een al ingestelde omgevingsvariabele gaat voor op het bestand.
+
 Vanuit de bestaande checkout:
 
 ```sh

@@ -25,6 +25,25 @@ class KNMIError(RuntimeError):
     pass
 
 
+def load_env_file(path: Path) -> None:
+    """Lees eenvoudige KEY=waarde-regels uit een lokaal, door Git genegeerd bestand.
+
+    Bestaande omgevingsvariabelen gaan voor; het bestand vult alleen aan.
+    """
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.removeprefix("export ").split("=", 1)
+        key, value = key.strip(), value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        if key:
+            os.environ.setdefault(key, value)
+
+
 class NoRedirects(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         # Voorkom dat een Authorization-header naar een andere host gaat.
@@ -101,6 +120,7 @@ class KNMIClient:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Controleer KNMI EDR-toegang zonder sleutels te tonen.")
     parser.parse_args()
+    load_env_file(Path(__file__).resolve().parent.parent / ".env")
     try:
         client = KNMIClient()
         metadata = client.metadata()

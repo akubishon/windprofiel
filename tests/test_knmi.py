@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 
-from windprofiel.knmi import BASE_URL, KNMIClient, KNMIError, day_query
+from windprofiel.knmi import BASE_URL, KNMIClient, KNMIError, day_query, load_env_file
 
 
 class KNMITests(unittest.TestCase):
@@ -47,3 +47,13 @@ class KNMITests(unittest.TestCase):
             with self.assertRaisesRegex(KNMIError, "limiet"):
                 client.metadata()
             self.assertEqual(list(Path(folder).iterdir()), [])
+
+    def test_env_file_fills_missing_variables_only(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {"EXISTING": "keep"}, clear=True):
+            path = Path(folder) / ".env"
+            path.write_text('# opmerking\nKNMI_EDR_API_KEY="abc 123"\nexport OTHER=x\nEXISTING=overwrite\n')
+            load_env_file(path)
+            load_env_file(Path(folder) / "ontbreekt")
+            self.assertEqual(os.environ["KNMI_EDR_API_KEY"], "abc 123")
+            self.assertEqual(os.environ["OTHER"], "x")
+            self.assertEqual(os.environ["EXISTING"], "keep")
