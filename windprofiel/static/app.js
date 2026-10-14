@@ -100,6 +100,7 @@ async function request(url, options = {}) {
 function parameters() {
   const params = new URLSearchParams({date: $("date").value});
   ids.forEach(id => params.set(id, $("station-"+id).value));
+  params.set("wake", $("wake").checked ? "1" : "0");
   return params;
 }
 async function load() {
@@ -119,7 +120,9 @@ async function load() {
       chart(card.querySelector(".plot"), p.power_mw, data.timestamps, "MW", p.curve?"Vermogen niet beschikbaar: geen bruikbare windmetingen.":"Vermogen nog niet beschikbaar: voeg een curve voor de juiste turbine-uitvoering toe.", "#32876c", p.reference_points.map(point=>({timestamp:point.timestamp,value:point.power_mw})));
       chart(card.querySelector(".windplot"), p.wind_ms, data.timestamps, "m/s op 10 m", "Geen bruikbare windmetingen.","#749caf", p.reference_points.map(point=>({timestamp:point.timestamp,value:point.wind_ms})));
       card.querySelector(".source").textContent=`KNMI ${p.station.properties.name} · ${p.missing_wind_minutes} ontbrekende windminuten`;
-      card.querySelector(".assumptions").textContent=p.assumptions;
+      // Opgeslagen voorbeeldprofielen liggen vast; het vinkje toont hun instelling.
+      if(window.WINDPROFIEL_PREVIEW) $("wake").checked=Boolean(data.wake);
+      card.querySelector(".assumptions").textContent=`${p.assumptions} ${data.wake?`Zogverlies: wind ${format(p.wake_deficit*100,0)} % lager voor alle turbines (scenario-aanname).`:"Zogverlies uitgeschakeld."}`;
       const source=card.querySelector(".curve-source");source.replaceChildren();
       if(p.curve){source.append(document.createTextNode(p.curve.status+" "));const link=document.createElement("a");link.href=p.curve.source;link.textContent=p.curve.kind==="cubic_scenario"?"Natuurkundige achtergrond ↗":"Curvebron ↗";link.target="_blank";link.rel="noopener";source.append(link);} else source.textContent="Vermogenscurve ontbreekt; windmetingen zijn wel beschikbaar.";
     });
@@ -164,6 +167,7 @@ async function init(){
     if(window.WINDPROFIEL_PREVIEW){
       $("preview-notice").hidden=false;
       ids.forEach(id=>{$("station-"+id).disabled=true;$("curve-"+id).disabled=true;});
+      $("wake").disabled=true;
       Object.keys(window.WINDPROFIEL_PREVIEW.profiles).forEach(day=>{
         const button=document.createElement("button");button.textContent=day;
         button.addEventListener("click",()=>{$("date").value=day;load();});
@@ -178,4 +182,5 @@ async function init(){
   finally{busy=false;controls();}
 }
 controls();init();
+$("wake").addEventListener("change",load);
 $("show-points").addEventListener("change",event=>$("charts").classList.toggle("hide-points",!event.target.checked));

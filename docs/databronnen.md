@@ -99,8 +99,9 @@ Aswind wordt geschat met `v_h = v_10 * (h / 10)^alpha`. De vaste exponenten
 0,10 voor water en 0,20 voor land zijn expliciete scenario-aannames, geen door
 KNMI gemeten lokale verticale profielen. De UI toont deze aannames. De
 vermogensberekening interpoleert de curve op de geschatte aswind, vermenigvuldigt
-met het turbinaantal en rekent kW om naar MW. Zogverliezen, beschikbaarheid,
-afregeling, stormhysterese en luchtdichtheidcorrectie zijn niet gemodelleerd.
+met het turbinaantal en rekent kW om naar MW. Zogverlies is standaard benaderd
+met een vaste snelheidsverlaging per park (zie [rekenmodel](rekenmodel.md#5-zogverlies));
+beschikbaarheid, afregeling, stormhysterese en luchtdichtheidcorrectie zijn niet gemodelleerd.
 
 ## Windparken
 
