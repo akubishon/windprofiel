@@ -64,7 +64,7 @@ class Handler(BaseHTTPRequestHandler):
         except KNMIError as exc:
             self.json_response(502, {"error": str(exc)})
         except (ValueError, TypeError):
-            self.json_response(400, {"error": "Controleer datum (2025), station en vermogenscurve."})
+            self.json_response(400, {"error": "Controleer datum (vanaf 2025 tot en met vandaag), station en vermogenscurve."})
 
     def do_POST(self):
         path = urlsplit(self.path).path

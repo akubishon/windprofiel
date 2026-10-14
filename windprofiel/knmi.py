@@ -9,7 +9,7 @@ import hashlib
 import json
 import os
 import tempfile
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
@@ -71,12 +71,12 @@ class KNMIClient:
         self.cache_dir = cache_dir
         self.opener = build_opener(NoRedirects())
 
-    def _get(self, path: str = "", params: dict[str, str] | None = None) -> dict:
+    def _get(self, path: str = "", params: dict[str, str] | None = None, cacheable: bool = True) -> dict:
         url = BASE_URL + path
         if params:
             url += "?" + urlencode(params)
         cache = None
-        if self.cache_dir is not None:
+        if self.cache_dir is not None and cacheable:
             cache = self.cache_dir / (hashlib.sha256(url.encode()).hexdigest() + ".json")
             if cache.exists():
                 return json.loads(cache.read_text())
@@ -114,7 +114,11 @@ class KNMIClient:
     def observations(self, station_id: str, day: date) -> dict:
         if not station_id:
             raise ValueError("Een geverifieerd KNMI-station-ID is vereist.")
-        return self._get("/locations/" + quote(station_id, safe=""), day_query(day))
+        query = day_query(day)
+        end = datetime.fromisoformat(query["datetime"].split("/")[1].replace("Z", "+00:00"))
+        # Recente dagen kunnen nog metingen bijkrijgen; pas na een dag vast in de cache.
+        final = end < datetime.now(timezone.utc) - timedelta(days=1)
+        return self._get("/locations/" + quote(station_id, safe=""), query, cacheable=final)
 
 
 def main() -> int:

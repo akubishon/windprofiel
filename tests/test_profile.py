@@ -1,8 +1,8 @@
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from zoneinfo import ZoneInfo
 
-from windprofiel.profile import combined_mw, cubic_power_kw, day_minutes, power_kw
+from windprofiel.profile import combined_mw, cubic_power_kw, day_minutes, power_kw, today
 
 
 class ProfileTests(unittest.TestCase):
@@ -16,9 +16,13 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(len(day_minutes(date(2025, 3, 30))), 1380)
         self.assertEqual(len(day_minutes(date(2025, 10, 26))), 1500)
 
-    def test_other_year_rejected(self):
+    def test_range_from_2025_until_today(self):
         with self.assertRaises(ValueError):
-            day_minutes(date(2024, 1, 1))
+            day_minutes(date(2024, 12, 31))
+        with self.assertRaises(ValueError):
+            day_minutes(today() + timedelta(days=1))
+        self.assertIn(len(day_minutes(today())), (1380, 1440, 1500))
+        self.assertEqual(len(day_minutes(date(2026, 3, 29))), 1380)
 
     def test_curve_boundaries_and_interpolation(self):
         # Synthetische testcurve, geen curve van een van de windparken.

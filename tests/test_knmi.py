@@ -10,6 +10,7 @@ from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 
 from windprofiel.knmi import BASE_URL, KNMIClient, KNMIError, day_query, load_env_file
+from windprofiel.profile import today
 
 
 class KNMITests(unittest.TestCase):
@@ -38,6 +39,16 @@ class KNMITests(unittest.TestCase):
             self.assertEqual(result, client.observations("0-20000-0-06270", date(2025, 1, 15)))
             self.assertEqual(client.opener.open.call_count, 1)
             self.assertNotIn("test-only", next(Path(folder).glob("*.json")).read_text())
+
+    def test_recent_days_are_not_cached(self):
+        with patch.dict(os.environ, {"KNMI_EDR_API_KEY": "test-only"}), tempfile.TemporaryDirectory() as folder:
+            client = KNMIClient(Path(folder))
+            client.opener = Mock()
+            client.opener.open.side_effect = lambda *a, **k: BytesIO(json.dumps({"type": "Coverage"}).encode())
+            client.observations("0-20000-0-06270", today())
+            client.observations("0-20000-0-06270", today())
+            self.assertEqual(client.opener.open.call_count, 2)
+            self.assertEqual(list(Path(folder).glob("*.json")), [])
 
     def test_failed_requests_are_not_cached(self):
         with patch.dict(os.environ, {"KNMI_EDR_API_KEY": "test-only"}), tempfile.TemporaryDirectory() as folder:
