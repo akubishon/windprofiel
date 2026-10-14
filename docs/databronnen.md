@@ -1,174 +1,105 @@
-# Databronnen en verificatie
+# Databronnen
 
-Doel: een kiesbare Nederlandse kalenderdag van 1 januari 2025 tot en met vandaag, met drie grafieken van
-geschat vermogen in MW: Windpark Fryslân, Wynpark Beabuorren en de som.
-Op gewone dagen zijn er 1.440 minuutwaarden; tijdens de klokwissel 1.380 of 1.500.
+Waar de gegevens vandaan komen en hoe betrouwbaar ze zijn. De rekenwijze en de
+ijking op productiedata staan in [rekenmodel.md](rekenmodel.md).
 
-## Wat werkt en wat nog onzeker is
+## KNMI-windmetingen
 
-De geregistreerde EDR-sleutel werkt via de beveiligde netwerkbinding. Historische
-CoverageJSON-antwoorden, eenheden en stations zijn live gecontroleerd. De webapp
-heeft datumkeuze, stationkeuze, caching, interactieve grafieken en CSV-download.
+| | |
+| --- | --- |
+| Dataset | `10-minute-in-situ-meteorological-observations`, versie 1.0 |
+| Toegang | KNMI EDR API, `https://api.dataplatform.knmi.nl/edr/v1/collections/10-minute-in-situ-meteorological-observations` |
+| Variabele | `ff`: tienminutengemiddelde windsnelheid in m/s, representatief voor 10 m (`dd` is de windrichting) |
+| Archief | vanaf 2012; vandaag tot ongeveer een kwartier geleden |
 
-Fryslân gebruikt nu het afgesproken benaderde kubische scenario. Zijn vermogen
-en de som worden berekend zodra bruikbare winddata aanwezig is. De exacte
-fabrikantcurve ontbreekt nog, maar is niet meer vereist voor dit indicatieve model.
-Beabuorren gebruikt een secundaire gepubliceerde curve. De ashoogte voor alle
-turbines, ruimtelijke representativiteit, hoogtecorrectie en referentieluchtdichtheid
-blijven modelonzekerheden. [Formules en bronnen](rekenmodel.md) onderscheiden
-gepubliceerde gegevens van onze expliciete scenario-keuzes.
+Primaire bronnen:
+[dataset en metadata](https://dataplatform.knmi.nl/dataset/10-minute-in-situ-meteorological-observations-1-0),
+[technische documentatie](https://dataplatform.knmi.nl/dataset/docs/10-minute-in-situ-meteorological-observations-1-0),
+[API-toegang](https://dataplatform.knmi.nl/dataset/access/10-minute-in-situ-meteorological-observations-1-0),
+[EDR-gebruik en sleutelaanvraag](https://developer.dataplatform.knmi.nl/edr-api) en de
+[OpenAPI-specificatie](https://tyk-cdn.dataplatform.knmi.nl/edr/v1/openapi.json).
 
-Data met grovere tijdstappen blijven als zodanig herkenbaar:
-interpolatie levert geen echte minuutmetingen. Lange meetgaten mogen niet stilzwijgend
-worden gevuld. De modeluitkomst is geen gemeten productie van de parkbeheerder.
+De EDR API is gekozen omdat die per station, variabele en tijdvak gericht kan
+opvragen, zonder honderden bestanden per dag te downloaden. Stations komen uit
+`/locations`; metingen uit `/locations/{id}` met `datetime` en `parameter-name`.
 
-## Geverifieerde KNMI-bron (14 oktober 2026)
+**Verwerking:**
 
-De netwerkblokkade voor KNMI is opgelost. Primaire bronnen:
+- De tijdstempel markeert het **einde** van het tienminuteninterval (UTC). De app
+  plaatst elk gemiddelde op het intervalmidden (vijf minuten eerder) en
+  interpoleert lineair naar minuten. Aan beide kanten van de dag wordt tien
+  minuten extra opgevraagd.
+- Negatieve, niet-eindige en ontbrekende waarden tellen als ontbrekend. Er is geen
+  extrapolatie en geen interpolatie over gaten of intervallen langer dan tien minuten.
+- Een ontbrekende minuut maakt de dagopbrengst onbekend. Alleen voor vandaag
+  telt de opbrengst tot het laatste meetmoment; een gat eerder op de dag maakt
+  ook die onbekend.
+- Windstoten (`fx`, `gff`) worden niet gebruikt.
+- Een Nederlandse kalenderdag heeft 1.440 minuten, of 1.380 en 1.500 bij de klokwissel.
 
-- [Dataset en metadata](https://dataplatform.knmi.nl/dataset/10-minute-in-situ-meteorological-observations-1-0).
-- [Technische documentatie](https://dataplatform.knmi.nl/dataset/docs/10-minute-in-situ-meteorological-observations-1-0).
-- [API-toegang voor deze dataset](https://dataplatform.knmi.nl/dataset/access/10-minute-in-situ-meteorological-observations-1-0).
-- [EDR-gebruik en sleutelaanvraag](https://developer.dataplatform.knmi.nl/edr-api).
-- [OpenAPI-specificatie](https://tyk-cdn.dataplatform.knmi.nl/edr/v1/openapi.json).
+Het archief is niet handmatig op volledigheid gecontroleerd; elke gekozen dag
+wordt afzonderlijk op ontbrekende metingen gecontroleerd.
 
-Dataset: `10-minute-in-situ-meteorological-observations`, versie `1.0`.
-KNMI beschrijft een historisch archief vanaf 2012-01-01. Dit dekt volgens de
-documentatie 2025 en verder, maar is niet handmatig gevalideerd en kan onvolledig zijn.
-Voor vandaag zijn de metingen tot circa een kwartier geleden beschikbaar. De
-opbrengst van vandaag is dan de som tot het laatste meetmoment; alleen ontbrekende
-minuten aan het eind van de lopende dag worden zo overgeslagen, een gat eerder op
-de dag maakt de opbrengst nog steeds onbekend. Antwoorden worden pas gecachet als
-het opgevraagde interval meer dan een dag voorbij is, zodat recente dagen bij
-opnieuw ophalen nieuwe metingen krijgen.
-Elke gekozen dag wordt afzonderlijk gecontroleerd op ontbrekende waarnemingen.
-De hele jaarreeks is niet in één keer gedownload of op volledigheid getoetst.
+**Sleutel en cache:** de client leest `KNMI_EDR_API_KEY` uit de omgeving (of
+`.env`), stuurt die alleen naar `api.dataplatform.knmi.nl` en volgt geen redirects.
+Een eigen sleutel vraag je aan via de [KNMI API Catalog](https://developer.dataplatform.knmi.nl/apis/).
+Antwoorden worden bewaard onder `.cache/knmi`, zonder sleutel; HTTP-fouten en dagen
+van de laatste 24 uur worden niet gecachet. Controleer de toegang met
+`python3 -m windprofiel.knmi`.
 
-Gekozen aansluiting: de **EDR API**, omdat deze stations, variabelen en een
-datuminterval gericht kan opvragen zonder honderden bestanden per dag te downloaden.
-Basisadres:
-`https://api.dataplatform.knmi.nl/edr/v1/collections/10-minute-in-situ-meteorological-observations`.
-Met `/locations` worden stations ontdekt; met `/locations/{location_id}` en
-`datetime` en `parameter-name` worden hun gegevens opgehaald.
-Gebruik station-ID's uit de actuele metadata, geen gegokte identifiers.
+WINS50 heeft wind op meerdere hoogtes, maar de versie
+[`wins50_ctl_nl_daily_3d/2`](https://dataplatform.knmi.nl/dataset/wins50-ctl-nl-daily-3d-2)
+dekt alleen 2019–2021.
 
-Variabele `ff`: tienminutengemiddelde windsnelheid, representatief voor 10 meter,
-in **m/s**. `dd`: gemiddelde windrichting, volgens de live metadata op sensorhoogte.
-Gebruik geen windstoten (`fx`, `gff`) als gemiddelde windsnelheid.
-De tijdstempel in de gegevens markeert het **einde** van het voorafgaande
-meetinterval in UTC. De bestandsnaam kan een ander tijdstip gebruiken; interpreteer
-de daadwerkelijke gegevenstijdstempels. De applicatie plaatst tienminutengemiddelden
-op het intervalmidden (gegevenstijdstempel minus vijf minuten), en interpoleert
-lineair tussen die middelpunten. Aan elke dagzijde wordt tien minuten extra
-opgevraagd. Negatieve, niet-eindige en ontbrekende windsnelheden worden ontbrekend.
-Er is geen extrapolatie en er wordt niet over ontbrekende samples of intervallen
-langer dan tien minuten geïnterpoleerd. Een ontbrekende minuut maakt de volledige
-dagopbrengst onbekend; er wordt geen gedeeltelijke som als volledige dag getoond.
+## Stations
 
-WINS50 heeft wind op meerdere hoogtes, maar de gecontroleerde versie
-`wins50_ctl_nl_daily_3d/2` dekt 2019–2021 en is daarom ongeschikt voor dit projectjaar.
-Bron: https://dataplatform.knmi.nl/dataset/wins50-ctl-nl-daily-3d-2.
+| Park | Standaardstation | Coördinaten | Afstand | Waarom |
+| --- | --- | --- | ---: | --- |
+| Fryslân | Houtribdijk (`0-20000-0-06258`) | 52,648° N, 5,401° E | 43 km | Beste aansluiting op productiedata ([rekenmodel, sectie 7](rekenmodel.md#7-ijking-op-productiedata-fryslân)) |
+| Beabuorren | Stavoren (`0-20000-0-06267`) | 52,897° N, 5,383° E | 19 km | Dichtstbijzijnde KNMI-station; niet geijkt op productie |
 
-## Toegang
+Stavoren ligt dichter bij Windpark Fryslân (17 km), maar meet structureel minder
+wind dan het park krijgt. Leeuwarden Airport (`0-20000-0-06270`) ligt op 26 km
+van Beabuorren. Er zijn geen metingen in de turbinegondels gebruikt; in de webapp
+is per park een ander station te kiezen. Afstand, windrichting en omgeving
+bepalen hoe representatief een station is.
 
-`KNMI_EDR_API_KEY` is ingesteld als beveiligde netwerkbinding, uitsluitend voor
-`api.dataplatform.knmi.nl`, en de daadwerkelijke EDR-aanvragen slagen.
-Het metadata-endpoint gaf een archief vanaf 2012 en 77 stations bij deze controle.
-Sleutels worden nooit in de repository opgeslagen. Voor een andere omgeving is
-een eigen **EDR API**-sleutel nodig, aangevraagd via het
-[KNMI API Catalog](https://developer.dataplatform.knmi.nl/apis/).
-De eerdere openbare Open Data-sleutel gaf HTTP 429 en is niet in de app opgenomen.
+## Windpark Fryslân
 
-Controleer metadata en stations met:
+- **89 turbines van 4,3 MW, 382,7 MW**: [exploitant](https://www.windparkfryslan.nl/onderwerpen/windturbines/).
+- **Ashoogte circa 115 m**: afgeleid uit de [factsheet](https://www.windparkfryslan.nl/wp-content/uploads/2020/05/Factsheet-Windpark-Fryslan.pdf),
+  180 m tiphoogte min de helft van 130 m rotordiameter. Nog niet gecontroleerd
+  tegen een technische specificatie.
+- **Turbinetype Siemens Gamesa SWT-DD-130**: volgens [Wikipedia](https://en.wikipedia.org/wiki/Windpark_Frysl%C3%A2n);
+  de daar gelinkte fabrikantpagina werkt niet meer.
+- **Geen gepubliceerde vermogenscurve**: de [turbinedatabase](https://en.wind-turbine-models.com/turbines/1898-siemens-gamesa-swt-dd-130)
+  heeft er geen. Daarom gebruikt het model een kubisch scenario met gekozen
+  grenzen (3 / 11,5 / 25 m/s); een curve van een ander 130-metermodel is bewust
+  niet gebruikt.
 
-```sh
-cd /workspace/windprofiel
-python3 -m windprofiel.knmi
-```
+## Wynpark Beabuorren
 
-De client leest de sleutel uit de omgeving, verstuurt die alleen naar de vaste
-KNMI-host en volgt geen redirects. Historische antwoorden kunnen lokaal worden
-gecached; HTTP-fouten worden niet gecached. Ruwe antwoorden staan onder `.cache/knmi`
-en bevatten geen Authorization-header of sleutel. Cachebestanden zijn niet tracked.
+- **8 turbines, 10,4 MW sinds 2007**: [Rengineers](https://rengineers.eu/nieuw/wynpark-beaborren-25-jaar/).
+- **Siemens SWT-1.3-62, locatie 53,052° N, 5,493° E** (Wûnseradiel, nauwkeurig
+  gelokaliseerd): [The Wind Power](https://www.thewindpower.net/windfarm_en_6263_beabuorren.php).
+  Het eerdere deel met een Bonus B44/600 bij Tjerkwerd is ontmanteld.
+- **Ashoogte 60 m**: uit [lokaal nieuws van januari 2007](https://tsjerkwert.nl/start-opschaling-van-het-wynpark/),
+  over de toenmalige bouwfase; nog niet bevestigd voor alle acht turbines.
+- **Vermogenscurve**: grafiekpunten van [Wind-Turbine-Models](https://en.wind-turbine-models.com/turbines/1457-siemens-swt-1-3-62),
+  met bronvermelding in `windprofiel/data/beabuorren.json`. Dit is een secundaire
+  bron; luchtdichtheid en herkomst zijn onbekend. Het punt bij 25 m/s is
+  weggelaten, omdat de datasheet daar cut-out noemt.
 
-## Stations en hoogtecorrectie
+## Controle
 
-Standaard gebruikt Fryslân **Houtribdijk** (`0-20000-0-06258`, 5.4006° E, 52.6481° N)
-als IJsselmeerproxy; dit station sloot het best aan op productiedata (zie
-[rekenmodel, sectie 7](rekenmodel.md#7-ijking-op-productiedata-fryslân)). Stavoren
-(`0-20000-0-06267`) is dichterbij maar gaf structureel te weinig wind. Beabuorren gebruikt standaard **Stavoren** (`0-20000-0-06267`,
-5.3833° E, 52.8967° N), het dichtstbijzijnde KNMI-station: 18,8 km van het park
-(53,052° N, 5,493° E, volgens [The Wind Power](https://www.thewindpower.net/windfarm_en_6263_beabuorren.php),
-"precise localization"). Leeuwarden Airport (`0-20000-0-06270`), eerder de
-standaard, ligt op 25,7 km. Voor Beabuorren is geen station geijkt op productiedata. Beide identifiers zijn afkomstig
-uit de actuele EDR-stationslijst en zijn voor de gecontroleerde dagen bruikbaar.
-Er zijn geen KNMI-metingen in de turbinegondels gebruikt. Een andere stationkeuze
-is mogelijk in de webapp; afstand, windrichting en lokale omgeving beïnvloeden
-de representativiteit. Een geografisch dichtbij station garandeert geen parkmeting.
+`python3 -m unittest discover -s tests -v` draait de unit-tests met nagebootste
+KNMI-antwoorden en synthetische testcurves, zonder netwerk.
 
-Aswind wordt geschat met `v_h = v_10 * (h / 10)^alpha`. De exponent voor
-Fryslân volgt een seizoensformule (0,18 in de winter, 0,05 in de zomer), geijkt
-op zes productiedagen; 0,20 voor land is een scenario-aanname. Geen van beide is een door KNMI gemeten lokaal verticaal profiel. De UI toont deze aannames. De
-vermogensberekening interpoleert de curve op de geschatte aswind, vermenigvuldigt
-met het turbinaantal en rekent kW om naar MW. Zogverlies is standaard benaderd
-met een vaste snelheidsverlaging per park (zie [rekenmodel](rekenmodel.md#5-zogverlies));
-beschikbaarheid, afregeling, stormhysterese en luchtdichtheidcorrectie zijn niet gemodelleerd.
+Echte EDR-dagprofielen met de standaardstations en zogverlies (modeluitkomsten,
+geen gemeten productie):
 
-## Windparken
-
-**Windpark Fryslân:** de exploitant bevestigt 89 turbines van 4,3 MW, samen
-382,7 MW. Bron: https://www.windparkfryslan.nl/onderwerpen/windturbines/.
-De genoemde hoogte van 180 meter is de tiphoogte en mag niet als ashoogte
-worden gebruikt. De [factsheet van de exploitant](https://www.windparkfryslan.nl/wp-content/uploads/2020/05/Factsheet-Windpark-Fryslan.pdf)
-toont een rotordiameter van 130 meter; dit impliceert ongeveer 115 meter ashoogte
-boven water (180 minus 65), nog te controleren tegen de technische specificatie.
-[Wikipedia](https://en.wikipedia.org/wiki/Windpark_Frysl%C3%A2n) koppelt het park aan
-**Siemens Gamesa SWT-DD-130**. De daar gelinkte fabrikantpagina uit 2021 geeft
-nu algemene website-inhoud en is daarom niet als primaire bevestiging gebruikt.
-De [turbinedatabase](https://en.wind-turbine-models.com/turbines/1898-siemens-gamesa-swt-dd-130)
-heeft voor dit model geen vermogenscurve. Een curve voor een ander 130-metermodel
-mag niet stilzwijgend worden gebruikt als curve voor deze 4,3 MW-uitvoering.
-
-**Wynpark Beabuorren (Tjerkwerd):** onderhoudsbedrijf Rengineers bevestigt acht
-turbines en 10,4 MW sinds 2007:
-https://rengineers.eu/nieuw/wynpark-beaborren-25-jaar/.
-The Wind Power specificeert acht **Siemens SWT-1.3-62**:
-https://www.thewindpower.net/windfarm_en_6263_beabuorren.php.
-Een lokaal nieuwsbericht van januari 2007 noemt aanvankelijk zes nieuwe
-Siemens 1.3-turbines en 60 meter hoogte:
-https://tsjerkwert.nl/start-opschaling-van-het-wynpark/.
-Dat is een beschrijving van de toenmalige bouwfase; gebruik deze niet als
-actueel turbinaantal. De ashoogte voor alle acht en de curve blijven te bevestigen.
-De eerder voorgestelde parkdomeinen zijn niet als officiële bron vastgesteld.
-
-Een [secundaire curve voor SWT-1.3-62](https://en.wind-turbine-models.com/turbines/1457-siemens-swt-1-3-62)
-is gevonden als numerieke gegevens bij de grafiek. Dit is geen officiële
-fabrikantcurve; luchtdichtheid en herkomst zijn daar niet voldoende vastgelegd.
-De pagina noemt bovendien generieke torenhoogtes van 68/90 meter, die niet
-zomaar op Beabuorren mogen worden toegepast. De gepubliceerde grafiekpunten staan
-met bronvermelding onder `windprofiel/data/beabuorren.json`. Het curvepunt bij
-25 m/s is verwijderd: de datasheet noemt cut-out bij 25 m/s, zodat het vermogen
-vanaf die snelheid nul is in dit eenvoudige model. Er wordt nog geen
-gecertificeerde of gemeten productie geclaimd.
-
-De rekenbasis heeft geen externe pakketten nodig en gebruikt Python 3.12.
-Controle vanuit `/workspace/windprofiel`:
-
-```sh
-python3 -m unittest discover -s tests -v
-```
-
-27 lokale tests slagen. De unit-tests gebruiken nagebootste antwoorden
-en synthetische testcurves; die testcurves staan niet in de applicatiedata.
-Daarnaast zijn daadwerkelijke EDR-dagprofielen gecontroleerd met de huidige standaardstations
-(Houtribdijk voor Fryslân, Stavoren voor Beabuorren) en zogverlies:
-
-| Datum | Minuten | Ontbrekende windminuten per station | Fryslân (scenario) | Beabuorren (secundaire curve) | Samen |
+| Datum | Minuten | Ontbrekende windminuten | Fryslân | Beabuorren | Samen |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 2025-01-15 | 1.440 | 0 | 270,993 MWh | 5,972 MWh | 276,965 MWh |
-| 2025-03-30 | 1.380 | 0 | 8.802,078 MWh | 238,650 MWh | 9.040,728 MWh |
-| 2025-10-26 | 1.500 | 0 | 9.440,290 MWh | 255,209 MWh | 9.695,499 MWh |
-
-Dit zijn modeluitkomsten, geen bevestigde parkproductie. De eerdere ontbrekende
-Fryslân-curve wordt nu vervangen door het expliciet gekozen scenario. Er is geen
-curve van een ander turbinemodel gebruikt.
+| 15-01-2025 | 1.440 | 0 | 271,0 MWh | 6,0 MWh | 277,0 MWh |
+| 30-03-2025 | 1.380 | 0 | 8.802,1 MWh | 238,7 MWh | 9.040,7 MWh |
+| 26-10-2025 | 1.500 | 0 | 9.440,3 MWh | 255,2 MWh | 9.695,5 MWh |

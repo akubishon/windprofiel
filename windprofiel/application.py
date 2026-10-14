@@ -12,19 +12,41 @@ from .knmi import KNMIClient, KNMIError
 from .profile import combined_mw, cubic_power_kw, day_minutes, power_kw, today
 
 ROOT = Path(__file__).resolve().parent.parent
+# Parkgegevens en modelaannames; bronnen en onderbouwing staan in docs/.
 PARKS = {
-    "fryslan": {"name": "Windpark Fryslân", "model": "Siemens Gamesa SWT-DD-130", "count": 89,
-                "rated_kw": 4300, "hub_height": 115, "alpha": 0.115, "alpha_seasonal": 0.065, "wake_deficit": 0.05, "station": "0-20000-0-06258",
-                "assumptions": "115 m ashoogte afgeleid uit tiphoogte en rotordiameter; seizoensexponent (circa 0,18 in de winter, 0,05 in de zomer) en station Houtribdijk zijn geijkt op productiedagen uit 2025, geen parkmeting."},
-    "beabuorren": {"name": "Wynpark Beabuorren", "model": "Siemens SWT-1.3-62", "count": 8,
-                   "rated_kw": 1300, "hub_height": 60, "alpha": 0.20, "wake_deficit": 0.02, "station": "0-20000-0-06267",
-                   "assumptions": "60 m ashoogte uit historisch lokaal nieuws, nog te bevestigen voor alle turbines; exponent 0,20 is een land-aanname. Stavoren is het dichtstbijzijnde KNMI-station (circa 19 km), geen parkmeting."},
+    "fryslan": {
+        "name": "Windpark Fryslân",
+        "model": "Siemens Gamesa SWT-DD-130",
+        "count": 89,
+        "rated_kw": 4300,
+        "hub_height": 115,
+        # Seizoensexponent: alpha + alpha_seasonal * cos(...), zie shear_exponent.
+        "alpha": 0.115,
+        "alpha_seasonal": 0.065,
+        "wake_deficit": 0.05,
+        "station": "0-20000-0-06258",  # Houtribdijk
+        "assumptions": "115 m ashoogte afgeleid uit tiphoogte en rotordiameter; seizoensexponent (circa 0,18 in de winter, "
+                       "0,05 in de zomer) en station Houtribdijk zijn geijkt op productiedagen uit 2025 en 2026, geen parkmeting.",
+    },
+    "beabuorren": {
+        "name": "Wynpark Beabuorren",
+        "model": "Siemens SWT-1.3-62",
+        "count": 8,
+        "rated_kw": 1300,
+        "hub_height": 60,
+        "alpha": 0.20,
+        "wake_deficit": 0.02,
+        "station": "0-20000-0-06267",  # Stavoren
+        "assumptions": "60 m ashoogte uit historisch lokaal nieuws, nog te bevestigen voor alle turbines; exponent 0,20 is een "
+                       "land-aanname. Stavoren is het dichtstbijzijnde KNMI-station (circa 19 km), geen parkmeting.",
+    },
 }
 FRYSLAN_SCENARIO = {
     "kind": "cubic_scenario", "model": PARKS["fryslan"]["model"],
     "rated_kw": 4300, "cut_in": 3, "rated_speed": 11.5, "cut_out": 25,
     "source": "https://windexchange.energy.gov/small-wind-guidebook",
-    "status": "Benaderd kubisch scenario, geen fabrikantcurve. 3 / 11,5 / 25 m/s zijn gekozen modelaannames, geen bevestigde turbinespecificaties.",
+    "status": "Benaderd kubisch scenario, geen fabrikantcurve. 3 / 11,5 / 25 m/s zijn gekozen modelaannames, "
+              "geen bevestigde turbinespecificaties.",
 }
 
 
@@ -244,7 +266,9 @@ def build_profile(day: date, stations: dict[str, str] | None = None, client: KNM
     for stamp in sorted(set(references[0]) | set(references[1]), key=datetime.fromisoformat):
         a, b = references[0].get(stamp), references[1].get(stamp)
         combined_points.append({"timestamp": stamp, "power_mw": None if a is None or b is None else a + b})
-    method = "KNMI-tienminutengemiddelden, geplaatst op intervalmidden en lineair geïnterpoleerd. Geen extrapolatie of overbrugging van meetgaten. Hoogtecorrectie met vaste exponent; geen afregeling, stilstand of luchtdichtheidcorrectie."
+    method = ("KNMI-tienminutengemiddelden, geplaatst op intervalmidden en lineair geïnterpoleerd. "
+              "Geen extrapolatie of overbrugging van meetgaten. Hoogtecorrectie met een exponent per park "
+              "(seizoensafhankelijk voor Fryslân); geen afregeling, stilstand of luchtdichtheidcorrectie.")
     method += " " + (WAKE_STATUS if wake else "Zogverlies uitgeschakeld: alle turbines krijgen de ongestoorde wind.")
     return {"date": day.isoformat(), "timezone": "Europe/Amsterdam", "minutes": len(moments), "wake": wake,
             "timestamps": stamps, "parks": profiles,

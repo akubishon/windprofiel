@@ -260,8 +260,9 @@ van het seizoen.
 | Fryslân | 89 × 4,3 MW | [Exploitant](https://www.windparkfryslan.nl/onderwerpen/windturbines/) |
 | Fryslân-ashoogte | circa 115 m | Afgeleid: 180 m tiphoogte − 130 m rotordiameter / 2, [factsheet](https://www.windparkfryslan.nl/wp-content/uploads/2020/05/Factsheet-Windpark-Fryslan.pdf) |
 | Fryslân-grenzen | 3 / 11,5 / 25 m/s | Afgesproken scenario-keuze; niet bevestigd door fabrikant |
-| Hoogte-exponenten | Fryslân 0,05 (zomer) tot 0,18 (winter) / 0,20 land | Fryslân geijkt op zes dagen (sectie 7); land is een modelkeuze; [achtergrond](https://en.wikipedia.org/wiki/Wind_profile_power_law) |
+| Hoogte-exponenten | Fryslân 0,05 (zomer) tot 0,18 (winter) / 0,20 land | Fryslân geijkt op tien productiedagen (sectie 7); land is een modelkeuze; [achtergrond](https://en.wikipedia.org/wiki/Wind_profile_power_law) |
 | Fryslân-station | Houtribdijk (`06258`) | Beste aansluiting op productiedata van de acht onderzochte stations (sectie 7) |
+| Beabuorren-station | Stavoren (`06267`) | Dichtstbijzijnde KNMI-station (19 km), niet geijkt op productiedata |
 | Beabuorren | 8 turbines, 10,4 MW | [Onderhoudsbedrijf Rengineers](https://rengineers.eu/nieuw/wynpark-beaborren-25-jaar/) |
 | Beabuorren-model | SWT-1.3-62 | [The Wind Power](https://www.thewindpower.net/windfarm_en_6263_beabuorren.php), secundaire bron |
 | Beabuorren-ashoogte | 60 m | [Lokaal bericht uit 2007](https://tsjerkwert.nl/start-opschaling-van-het-wynpark/); niet bevestigd voor alle acht turbines |

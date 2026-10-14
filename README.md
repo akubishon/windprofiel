@@ -1,96 +1,115 @@
 # Windprofiel
 
-Een lokale webapp met datumkeuze van 1 januari 2025 tot en met vandaag, KNMI-winddata en drie
-panelen: Windpark Fryslân, Wynpark Beabuorren en hun gecombineerde vermogen.
+Lokale webapp die per dag het geschatte vermogen toont van **Windpark Fryslân**,
+**Wynpark Beabuorren** en beide samen, berekend uit KNMI-windmetingen. Kies een
+dag van 1 januari 2025 tot en met vandaag. Het is een indicatief model, geen
+gemeten productie.
 
-## Starten
+## Snel bekijken
 
-**Direct bekijken in Codex:** open [index.html](index.html) in de hoofdmap.
-Dit is een zelfstandige pagina met drie opgeslagen echte KNMI-dagen:
-15 januari, 30 maart en 26 oktober 2025. Grafieken, bronnen en CSV werken zonder
-Python-server of API-sleutel. Andere dagen ophalen en stations of curves aanpassen
-kan alleen via de Python-webapp hieronder. Open daarvoor niet het losse bestand
-`windprofiel/static/index.html`: dat is uitsluitend de template van de server.
+Open [index.html](index.html) in de hoofdmap. Dat is een zelfstandige pagina met
+drie opgeslagen KNMI-dagen (15-01-2025, 30-03-2025 en 26-10-2025); er is geen
+server of API-sleutel nodig. Voor andere dagen, stations of curves start je de
+webapp hieronder. (`windprofiel/static/index.html` is alleen de template van de server.)
 
-De zelfstandige pagina opnieuw maken (met werkende KNMI-binding):
+## Webapp starten
+
+Vereist Python 3.12 of nieuwer; er zijn geen externe pakketten nodig.
+
+1. Zet je KNMI EDR API-sleutel in de omgeving als `KNMI_EDR_API_KEY`, of lokaal in
+   `.env`: `cp .env.example .env` en vul de sleutel in. `.env` staat in `.gitignore`;
+   een ingestelde omgevingsvariabele gaat voor.
+2. Start de server:
+
+   ```sh
+   python3 -m windprofiel.server --port 8000
+   ```
+
+3. Open <http://127.0.0.1:8000>. De server luistert alleen lokaal en houdt de
+   sleutel buiten de browser.
+
+## Gebruik
+
+- De app opent op vandaag. Datums staan als dd-mm-jjjj; typ bijvoorbeeld
+  `11-10-2026`, gebruik ← en → of de kalenderknop.
+- **Vandaag** toont de metingen tot nu (KNMI loopt ongeveer een kwartier achter);
+  de opbrengst geldt dan tot het laatste meetmoment. **Profiel ophalen** haalt
+  nieuwe metingen op.
+- Per park staan dagopbrengst en vollasturen. **Sleep** in een vermogensgrafiek
+  om een tijdvak te selecteren; klik zonder slepen of op **Wis selectie** om terug te gaan.
+- Onder **Meetstations en vermogenscurves** kies je een ander KNMI-station of
+  upload je een eigen curve (zie [Curve-formaat](#curve-formaat)).
+- **Download CSV** geeft de minuutreeksen in Nederlandse notatie voor Excel:
+  puntkomma, decimale komma en tijden als `11-10-2026 13:05`. In het dubbele uur
+  bij de wintertijdwissel staat `zomertijd` of `wintertijd` erachter. Ontbrekend
+  vermogen blijft leeg.
+
+## Model in het kort
+
+| | Windpark Fryslân | Wynpark Beabuorren |
+| --- | --- | --- |
+| Turbines | 89 × 4,3 MW (382,7 MW) | 8 × 1,3 MW (10,4 MW) |
+| KNMI-station | Houtribdijk | Stavoren |
+| Ashoogte | 115 m | 60 m |
+| Hoogte-exponent α | 0,18 (winter) tot 0,05 (zomer), geijkt op productie | 0,20 (aanname) |
+| Vermogenscurve | kubisch scenario: 3 / 11,5 / 25 m/s | secundaire gepubliceerde curve |
+| Zogverlies | 5 % minder wind | 2 % minder wind |
+
+Wind op ashoogte: `v_h = v_10 × (h / 10)^α`. De tienminutengemiddelden van KNMI
+worden lineair naar minuten geïnterpoleerd; meetgaten blijven leeg. Zogverlies
+staat standaard aan en is uit te zetten met het vinkje (of `wake=0` in de API).
+
+Meer uitleg:
+
+- [Formules en ijking](docs/rekenmodel.md): rekenwijze, aannames en de vergelijking met productiedata.
+- [Databronnen](docs/databronnen.md): KNMI-dataset, stations, parkgegevens en hun bronnen.
+
+## Curve-formaat
+
+Een eigen curve is een JSON-bestand met:
+
+- `model`: exact de getoonde turbinenaam;
+- `source`: HTTPS-bron-URL;
+- `cut_out`: uitschakelsnelheid in m/s;
+- `points`: oplopende paren `[m/s, kW]`, beginnend bij nul vermogen, met het
+  nominale vermogen en eindigend onder `cut_out`;
+- optioneel `status`: tekst over bron en beperkingen.
+
+Een geüploade curve gaat voor op het standaardmodel. De controle van het formaat
+is geen certificering van de bron.
+
+## Projectindeling
+
+| Pad | Inhoud |
+| --- | --- |
+| `windprofiel/knmi.py` | KNMI EDR-client met cache |
+| `windprofiel/profile.py` | dagminuten, curves en kubisch model |
+| `windprofiel/application.py` | parkgegevens, profielberekening en CSV |
+| `windprofiel/server.py` | lokale webserver en API |
+| `windprofiel/preview.py` | maakt de zelfstandige `index.html` |
+| `windprofiel/static/` | template, JavaScript en CSS van de webapp |
+| `windprofiel/data/` | curve van Beabuorren |
+| `tests/` | unit-tests zonder netwerk |
+| `docs/` | rekenmodel en databronnen |
+
+Lokale bestanden onder `.cache/` (KNMI-antwoorden, geüploade curves) en `.env`
+gaan niet mee in Git. Dagen van de laatste 24 uur worden niet gecachet, zodat
+ze nieuwe metingen krijgen.
+
+## Controle en onderhoud
+
+```sh
+python3 -m unittest discover -s tests -v   # unit-tests, zonder netwerk of sleutel
+python3 -m windprofiel.knmi                # controleert echte KNMI-toegang
+node --check windprofiel/static/app.js     # JavaScript-syntax
+```
+
+Na wijzigingen aan de webapp maak je de zelfstandige pagina opnieuw (met
+KNMI-toegang):
 
 ```sh
 python3 -m windprofiel.preview
+python3 -m windprofiel.preview --dates 2025-06-01 2025-06-02 --output voorbeeld.html
 ```
 
-Met `--dates 2025-06-01 2025-06-02 --output voorbeeld.html` kun je andere echte
-dagen bundelen. De HTML bevat winddata en modeluitkomsten, nooit de API-sleutel.
-
-Python 3.12 of nieuwer met de standaardbibliotheek is voldoende; er zijn geen
-externe pakketten nodig. Configureer `KNMI_EDR_API_KEY` via de beveiligde
-omgevingsinstellingen voor `api.dataplatform.knmi.nl`. De app houdt de sleutel
-op de server, buiten de browser en de repository.
-
-Lokaal kan de sleutel ook in een `.env`-bestand in de projectmap staan:
-`cp .env.example .env` en vul `KNMI_EDR_API_KEY=` aan. `.env` staat in
-`.gitignore`; een al ingestelde omgevingsvariabele gaat voor op het bestand.
-
-Vanuit de bestaande checkout:
-
-```sh
-cd /workspace/windprofiel
-python3 -m windprofiel.server --port 8000
-```
-
-De server luistert alleen lokaal. Gebruik de bestaande checkout; elke cloudtaak
-heeft al een geïsoleerde omgeving, dus maak geen extra Git-worktree voor setup.
-
-## Databron en beperkingen
-
-De app gebruikt de officiële KNMI EDR API en de dataset
-`10-minute-in-situ-meteorological-observations` (versie 1.0). Minuutwaarden zijn
-lineair geïnterpoleerde tienminutengemiddelden, geen minuutmetingen. Meetgaten
-blijven ontbrekend. De Nederlandse kalenderdag volgt zomer- en wintertijd.
-
-Beabuorren gebruikt een gepubliceerde secundaire turbinecurve. Fryslân gebruikt
-standaard een expliciet benaderd kubisch model: in de aanloop
-`P = 4300 * (v³ - 3³) / (11.5³ - 3³)` kW per turbine, met wind op ashoogte
-(standaard station Houtribdijk; `α` van 0,18 in de winter tot 0,05 in de zomer,
-geijkt op zes productiedagen).
-Onder 3 m/s is het vermogen nul, van 11,5 tot en met 25 m/s 4.300 kW, boven
-25 m/s nul. De drie snelheidgrenzen zijn gekozen scenario-aannames, geen
-bevestigde turbinespecificaties. Alle drie de grafieken tonen nu geschat vermogen.
-Stippen markeren berekeningen uit oorspronkelijke tienminutengemiddelden; de
-minuutlijn ertussen is interpolatie. Zogverlies is standaard benaderd met een
-vaste windverlaging van 5 % (Fryslân) en 2 % (Beabuorren); dat zijn
-scenario-aannames zonder windrichting, uit te zetten met een vinkje of `wake=0`.
-Zie [formules en bronnen](docs/rekenmodel.md).
-Een geüploade passende Fryslân-curve krijgt voorrang op dit model.
-
-Een curve kan via de webapp als JSON worden toegevoegd. Formaat: `model` moet
-exact de getoonde turbinenaam zijn; `source` is een HTTPS-bron-URL; `cut_out` is
-in m/s; `points` bevat oplopende paren van windsnelheid in m/s en vermogen in kW.
-De punten beginnen bij nul vermogen, bereiken het nominale vermogen en eindigen
-onder cut-out. Een optioneel tekstveld `status` beschrijft bron en beperkingen.
-Formaatvalidatie bewijst niet dat de curve gecertificeerd is. Uploads staan onder
-`.cache/curves`; KNMI-antwoorden onder `.cache/knmi`. Deze lokale bestanden en
-`.env` zijn uitgesloten van Git.
-
-De app heeft datumkeuze, vorige/volgende dag, stationkeuze, hoverwaarden,
-CSV-download en broninformatie. Per park staan de vollasturen van de dag naast
-de dagopbrengst. Sleep in een vermogensgrafiek om een tijdvak te selecteren: alle
-drie de kaarten tonen dan opbrengst, vollasturen en gemiddeld vermogen van dat
-tijdvak. Klik zonder slepen of gebruik **Wis selectie** om terug te gaan.
-De webapp opent op vandaag. Vandaag toont de metingen tot nu (KNMI loopt circa een kwartier achter); de
-opbrengst geldt dan tot het laatste meetmoment. Klik **Profiel ophalen** voor
-nieuwe metingen. Dagen van de laatste 24 uur worden niet gecachet. Datums staan overal als dd-mm-jjjj (typ bijvoorbeeld 11-10-2026). De CSV is
-in Nederlandse notatie voor Excel: puntkomma als scheidingsteken, decimale komma
-en tijden als `11-10-2026 13:05`; in het dubbele uur bij de wintertijdwissel
-staat `zomertijd` of `wintertijd` erachter. CSV-velden voor ontbrekend vermogen blijven leeg.
-Bekijk [bronnen, rekenwijze en validatie](docs/databronnen.md) voor alle aannames.
-
-## Controle
-
-```sh
-python3 -m windprofiel.knmi
-python3 -m unittest discover -s tests -v
-```
-
-De eerste opdracht controleert echte API-toegang. De tweede voert onafhankelijke
-unit-tests uit zonder netwerk of sleutel. Bij wijziging van de webapp is ook
-`node --check windprofiel/static/app.js` bruikbaar als JavaScript-syntaxcontrole.
+De HTML bevat winddata en modeluitkomsten, nooit de API-sleutel.
