@@ -10,6 +10,11 @@ def day_minutes(day: date) -> list[datetime]:
     """UTC-tijdstippen voor elke minuut van een Nederlandse kalenderdag in 2025."""
     if day.year != 2025:
         raise ValueError("Kies een datum in 2025.")
+    return local_minutes(day)
+
+
+def local_minutes(day: date) -> list[datetime]:
+    """UTC-tijdstippen voor elke minuut van een Nederlandse kalenderdag, elk jaar."""
     local = ZoneInfo("Europe/Amsterdam")
     start = datetime.combine(day, time(), local).astimezone(timezone.utc)
     end = datetime.combine(day + timedelta(days=1), time(), local).astimezone(timezone.utc)

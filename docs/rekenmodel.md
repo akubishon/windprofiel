@@ -230,6 +230,51 @@ seizoensformule is empirisch en beschrijft niet het weer van de dag: een
 stabiele zomernacht of een onstabiele winterdag krijgt dezelfde `α` als de rest
 van het seizoen.
 
+## 8. Test: HARMONIE als windbron (oktober 2026)
+
+Getest is of modelwind van KNMI-weermodel HARMONIE-AROME de stationswind kan
+vervangen. Bron: Open Data-dataset `harmonie_arome_cy43_p1` (archief vanaf
+7 januari 2026, elk uur een run). Elke run is een tar van circa 1 GB met per
+voorspellingsuur een GRIB1-bestand (`HA43_N20_<run>_<uur>00_GB`, ~14 MB).
+`windprofiel/harmonie.py` zoekt via HTTP-range-verzoeken de tar-headers af en
+leest alleen het benodigde GRIB-bestand. Per uur wordt alleen het parkgemiddelde
+op 100 en 200 m in `.cache/harmonie` bewaard. De decodering is gecontroleerd
+tegen ecCodes (zelfde waarde op 53,032 N 5,278 E).
+
+Werkwijze per uur `t`: run `t − 1 h`, termijn +1 h (bij een ontbrekende run een
+eerdere run met termijn tot +4 h). Uit `u` en `v` (parameters 33/34, niveautype 105)
+volgt per roosterpunt de snelheid; velden met een bitmap worden overgeslagen.
+Het parkgebied is 52,995–53,065 N, 5,20–5,34 E (20 roosterpunten, aanname rond
+53,03 N 5,27 E). Ashoogte 115 m: lineair tussen 100 en 200 m,
+`v₁₁₅ = v₁₀₀ + 0,15 (v₂₀₀ − v₁₀₀)`. De uurwaarden zijn momentopnames en worden
+lineair naar minuten geïnterpoleerd; daarna hetzelfde kubische model met 5 %
+zogverlies als het stationsmodel.
+
+```sh
+python3 -m windprofiel.compare 2026-10-13 --production 2026-10-13=5.9
+```
+
+| Dag | Productie | HARMONIE | Stationsmodel (Houtribdijk, seizoens-α) |
+| --- | ---: | ---: | ---: |
+| 6 oktober 2026 | 0,49 GWh | 0,76 GWh | 0,48 GWh |
+| 7 oktober 2026 | 1,3 GWh | 1,26 GWh | 1,81 GWh |
+| 10 oktober 2026 | 8,4 GWh | 8,69 GWh | 7,79 GWh |
+| 12 oktober 2026 | 1,6 GWh | 1,77 GWh | 1,57 GWh |
+| 13 oktober 2026 | 5,9 GWh | 8,40 GWh | 5,28 GWh |
+
+Gemiddelde absolute afwijking over vijf dagen: HARMONIE 0,65 GWh, stationsmodel
+0,36 GWh. Zonder 13 oktober: HARMONIE 0,19 GWh, stationsmodel 0,29 GWh.
+Op 13 oktober geeft HARMONIE de hele dag 11–14 m/s op 115 m (piek 18,6 m/s om
+15 UTC) en dus vrijwel vol vermogen; het park leverde gemiddeld ~245 MW.
+Afregeling, te veel modelwind of een te lage nominale snelheid (11,5 m/s) zijn
+zonder uurproductie niet te onderscheiden. Met termijn +3 h in plaats van +1 h
+verandert de uitkomst nauwelijks (8,67 GWh op 13 oktober, 0,68 GWh op 6 oktober).
+
+**Nog niet ingebouwd in de webapp.** Vijf dagen uit één maand zijn te weinig om
+het stationsmodel te vervangen; HARMONIE heeft geen seizoensijking nodig, maar
+heeft alleen uurlijkse momentopnames en geen archief vóór 7 januari 2026, dus
+niet voor de 2025-dagen in de app.
+
 ## Bronnen en status van de getallen
 
 | Gegeven | Waarde | Onderbouwing |
@@ -244,4 +289,5 @@ van het seizoen.
 | Beabuorren-model | SWT-1.3-62 | [The Wind Power](https://www.thewindpower.net/windfarm_en_6263_beabuorren.php), secundaire bron |
 | Beabuorren-ashoogte | 60 m | [Lokaal bericht uit 2007](https://tsjerkwert.nl/start-opschaling-van-het-wynpark/); niet bevestigd voor alle acht turbines |
 | Beabuorren-curve | Numerieke grafiekpunten, cut-out 25 m/s | [Wind-Turbine-Models](https://en.wind-turbine-models.com/turbines/1457-siemens-swt-1-3-62), secundaire bron |
+| HARMONIE-test | `harmonie_arome_cy43_p1`, 100/200 m, parkgemiddelde | [Open Data-dataset](https://dataplatform.knmi.nl/dataset/harmonie-arome-cy43-p1-1-0); vergeleken op vijf productiedagen (sectie 8) |
 | Zogverlies | 5 % Fryslân / 2 % Beabuorren minder wind | Onze scenario-keuze; niet gekalibreerd, geen windrichting of opstelling |
