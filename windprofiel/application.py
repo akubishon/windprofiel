@@ -14,8 +14,8 @@ from .profile import combined_mw, cubic_power_kw, day_minutes, power_kw
 ROOT = Path(__file__).resolve().parent.parent
 PARKS = {
     "fryslan": {"name": "Windpark Fryslân", "model": "Siemens Gamesa SWT-DD-130", "count": 89,
-                "rated_kw": 4300, "hub_height": 115, "alpha": 0.10, "wake_deficit": 0.05, "station": "0-20000-0-06267",
-                "assumptions": "115 m ashoogte afgeleid uit tiphoogte en rotordiameter; exponent 0,10 is een water-aanname. Stavoren is een nabijgelegen kuststation, geen parkmeting."},
+                "rated_kw": 4300, "hub_height": 115, "alpha": 0.18, "wake_deficit": 0.05, "station": "0-20000-0-06258",
+                "assumptions": "115 m ashoogte afgeleid uit tiphoogte en rotordiameter; exponent 0,18 en station Houtribdijk zijn geijkt op vier productiedagen (dec. 2025), geen parkmeting."},
     "beabuorren": {"name": "Wynpark Beabuorren", "model": "Siemens SWT-1.3-62", "count": 8,
                    "rated_kw": 1300, "hub_height": 60, "alpha": 0.20, "wake_deficit": 0.02, "station": "0-20000-0-06270",
                    "assumptions": "60 m ashoogte uit historisch lokaal nieuws, nog te bevestigen voor alle turbines; exponent 0,20 is een land-aanname. Leeuwarden is een regionaal landstation, geen parkmeting."},

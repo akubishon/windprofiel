@@ -28,7 +28,7 @@
       <section class="card" id="combined"><div class="card-head"><div><span class="eyebrow">BEIDE PARKEN · 393,1 MW</span><h2>Gecombineerd vermogen</h2></div><div class="energy">—</div></div><div class="plot"></div><p class="source">De som van beide parken op hetzelfde tijdstip.</p></section>
     </div>
     <details class="settings"><summary>Meetstations en vermogenscurves</summary>
-      <p>Meetstations liggen buiten de parken. De standaardkeuze gebruikt Stavoren voor het IJsselmeer en Leeuwarden voor land. Je kunt per park een ander station kiezen.</p>
+      <p>Meetstations liggen buiten de parken. De standaardkeuze gebruikt Houtribdijk voor het IJsselmeer (geijkt op productiedagen) en Leeuwarden voor land. Je kunt per park een ander station kiezen.</p>
       <div class="settings-grid"><div><label for="station-fryslan">KNMI-station voor Fryslân</label><select id="station-fryslan"></select><label for="curve-fryslan">Curve voor Siemens Gamesa SWT-DD-130 (4,3 MW)</label><input type="file" id="curve-fryslan" accept=".json,application/json"></div>
       <div><label for="station-beabuorren">KNMI-station voor Beabuorren</label><select id="station-beabuorren"></select><label for="curve-beabuorren">Curve voor Siemens SWT-1.3-62 (1,3 MW)</label><input type="file" id="curve-beabuorren" accept=".json,application/json"></div></div>
       <p>Fryslân gebruikt standaard het benaderde kubische model hieronder. Een aangeleverde curve vervangt dat model. Beabuorren gebruikt een secundaire gepubliceerde curve. Beide geven indicatieve schattingen.</p>
@@ -37,8 +37,8 @@
     <details class="settings" id="formulas"><summary>Formules, werking en bronnen</summary>
       <h3>1. Van KNMI-wind naar wind op ashoogte</h3>
       <div class="formula">v<sub>h</sub> = v<sub>10</sub> × (h / 10)<sup>α</sup></div>
-      <p>v<sub>10</sub> is de KNMI-windsnelheid op 10 meter in m/s; h is de ashoogte in meters. α beschrijft hoe snel de wind met de hoogte toeneemt. Fryslân gebruikt h = 115 m en α = 0,10; Beabuorren h = 60 m en α = 0,20. De exponenten zijn vaste scenario-aannames, geen lokale metingen. Deze omzetting beïnvloedt de omvang van de vermogensschommelingen.</p>
-      <p><a href="https://en.wikipedia.org/wiki/Wind_profile_power_law" target="_blank" rel="noopener">Achtergrond: wind profile power law</a> beschrijft de formule en de afhankelijkheid van terrein en atmosferische stabiliteit. De bron noemt ongeveer 0,11 boven water; onze 0,10 is een afgeronde keuze. 0,20 voor land is onze modelkeuze en niet specifiek voor Beabuorren vastgesteld.</p>
+      <p>v<sub>10</sub> is de KNMI-windsnelheid op 10 meter in m/s; h is de ashoogte in meters. α beschrijft hoe snel de wind met de hoogte toeneemt. Fryslân gebruikt h = 115 m en α = 0,18; Beabuorren h = 60 m en α = 0,20. De Fryslân-exponent is geijkt op vier dagopbrengsten uit december 2025; geen van beide is een lokale meting. Deze omzetting beïnvloedt de omvang van de vermogensschommelingen.</p>
+      <p><a href="https://en.wikipedia.org/wiki/Wind_profile_power_law" target="_blank" rel="noopener">Achtergrond: wind profile power law</a> beschrijft de formule en de afhankelijkheid van terrein en atmosferische stabiliteit. De bron noemt ongeveer 0,11 boven water in neutrale lucht; in stabiele winterlucht is de toename met de hoogte groter. Met 0,10 schatte het model de Fryslân-productie tot factor 2,7 te laag. 0,20 voor land is onze modelkeuze en niet specifiek voor Beabuorren vastgesteld.</p>
       <h3>2. Fryslân: benaderd vermogen per turbine</h3>
       <p>Hier is v de geschatte wind op ashoogte, niet de ruwe KNMI-wind op 10 meter.</p>
       <div class="formula">P(v) = 0 kW bij v &lt; 3 m/s<br>P(v) = 4.300 × (v³ − 3³) / (11,5³ − 3³) kW bij 3 ≤ v &lt; 11,5<br>P(v) = 4.300 kW bij 11,5 ≤ v ≤ 25<br>P(v) = 0 kW bij v &gt; 25</div>

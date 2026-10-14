@@ -62,14 +62,14 @@ class ApplicationTests(unittest.TestCase):
             def locations(self):
                 return {"features": [{"id": p["station"], "properties": {"name": k}} for k,p in PARKS.items()]}
             def observations(self, station, day):
-                data = payload([8, 8, 8])
+                data = payload([5, 5, 5])
                 data["coverages"][0]["eumetnet:locationId"] = station
                 return data
         with patch("windprofiel.application.load_curve", return_value=None):
             on = build_profile(date(2025,1,1), client=Client())
             off = build_profile(date(2025,1,1), client=Client(), wake=False)
         self.assertTrue(on["wake"]); self.assertFalse(off["wake"])
-        index = on["parks"]["fryslan"]["wind_ms"].index(8)
+        index = on["parks"]["fryslan"]["wind_ms"].index(5)
         self.assertLess(on["parks"]["fryslan"]["power_mw"][index], off["parks"]["fryslan"]["power_mw"][index])
         self.assertIn("Zogverlies uitgeschakeld", off["method"])
 
