@@ -200,6 +200,8 @@ async function load() {
 function moveDay(delta){const d=new Date($("date").value+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+delta);$("date").value=d.toISOString().slice(0,10);load();}
 $("previous").addEventListener("click",()=>moveDay(-1));$("next").addEventListener("click",()=>moveDay(1));
 $("date").max=today();
+// De webapp opent op vandaag; de zelfstandige voorbeeldpagina op haar eerste opgeslagen dag.
+if(!window.WINDPROFIEL_PREVIEW) $("date").value=today();
 $("date").addEventListener("change",load);$("refresh").addEventListener("click",load);
 $("export").addEventListener("click",async()=>{
   if(!current)return;
