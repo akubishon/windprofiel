@@ -17,8 +17,8 @@ PARKS = {
                 "rated_kw": 4300, "hub_height": 115, "alpha": 0.115, "alpha_seasonal": 0.065, "wake_deficit": 0.05, "station": "0-20000-0-06258",
                 "assumptions": "115 m ashoogte afgeleid uit tiphoogte en rotordiameter; seizoensexponent (circa 0,18 in de winter, 0,05 in de zomer) en station Houtribdijk zijn geijkt op productiedagen uit 2025, geen parkmeting."},
     "beabuorren": {"name": "Wynpark Beabuorren", "model": "Siemens SWT-1.3-62", "count": 8,
-                   "rated_kw": 1300, "hub_height": 60, "alpha": 0.20, "wake_deficit": 0.02, "station": "0-20000-0-06270",
-                   "assumptions": "60 m ashoogte uit historisch lokaal nieuws, nog te bevestigen voor alle turbines; exponent 0,20 is een land-aanname. Leeuwarden is een regionaal landstation, geen parkmeting."},
+                   "rated_kw": 1300, "hub_height": 60, "alpha": 0.20, "wake_deficit": 0.02, "station": "0-20000-0-06267",
+                   "assumptions": "60 m ashoogte uit historisch lokaal nieuws, nog te bevestigen voor alle turbines; exponent 0,20 is een land-aanname. Stavoren is het standaardstation (keuze gebruiker), geen parkmeting."},
 }
 FRYSLAN_SCENARIO = {
     "kind": "cubic_scenario", "model": PARKS["fryslan"]["model"],
