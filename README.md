@@ -35,6 +35,9 @@ Vereist Python 3.12 of nieuwer; er zijn geen externe pakketten nodig.
 - **Vandaag** toont de metingen tot nu (KNMI loopt ongeveer een kwartier achter);
   de opbrengst geldt dan tot het laatste meetmoment. **Profiel ophalen** haalt
   nieuwe metingen op.
+- **Geschatte productie** bovenaan toont per park en samen de opbrengst,
+  vollasturen, gemiddeld vermogen, piek en benutting (gemiddeld vermogen gedeeld
+  door het nominale vermogen), voor de hele dag of voor de gekozen selectie.
 - Per park staan dagopbrengst en vollasturen. **Sleep** in een vermogensgrafiek
   om een tijdvak te selecteren; klik zonder slepen of op **Wis selectie** om terug te gaan.
 - Onder **Meetstations en vermogenscurves** kies je een ander KNMI-station of

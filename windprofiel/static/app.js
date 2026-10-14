@@ -195,6 +195,7 @@ function setSelection(range) {
     }
   });
   if (!current) return;
+  updateDashboard(range);
 
   [...ids, "combined"].forEach(id => {
     const box = $(id).querySelector(".range");
@@ -215,6 +216,74 @@ function setSelection(range) {
     const energy = values.reduce((sum, v) => sum + v, 0) / 60;
     text.textContent = `Selectie ${label}: ${format(energy)} MWh · ${format(energy / ratedMW(id), 2)} vollasturen`
       + ` · gemiddeld ${format(energy / (values.length / 60))} MW`;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Productieoverzicht: dag (of vandaag tot nu) of de gekozen selectie
+// ---------------------------------------------------------------------------
+
+function energyText(mwh) {
+  return mwh >= 1000 ? `${format(mwh / 1000, 2)} GWh` : `${format(mwh)} MWh`;
+}
+
+// Opbrengst, gemiddeld vermogen en piek over een tijdvak; ontbrekende data maakt de opbrengst onbekend.
+function periodStats(id, range) {
+  const series = seriesFor(id);
+  let first = 0, last = series.length - 1, energy;
+  if (range) {
+    [first, last] = [range.a, range.b];
+    const values = series.slice(first, last + 1);
+    energy = values.includes(null) ? null : values.reduce((sum, v) => sum + v, 0) / 60;
+  } else {
+    const source = id === "combined" ? current : current.parks[id];
+    energy = id === "combined" ? current.combined_energy_mwh : source.energy_mwh;
+    const until = id === "combined" ? current.combined_energy_until : source.energy_until;
+    if (until) last = current.timestamps.indexOf(until);
+  }
+  let peak = null, peakAt = null;
+  for (let i = first; i <= last; i++) {
+    if (series[i] !== null && (peak === null || series[i] > peak)) {
+      peak = series[i];
+      peakAt = current.timestamps[i];
+    }
+  }
+  const hours = (last - first + 1) / 60;
+  const mean = energy === null ? null : energy / hours;
+  return {energy, hours, mean, peak, peakAt, factor: mean === null ? null : mean / ratedMW(id)};
+}
+
+function periodLabel(range) {
+  if (range) {
+    const end = current.timestamps[range.b + 1]?.slice(11, 16) ?? "24:00";
+    return `Selectie ${current.timestamps[range.a].slice(11, 16)}–${end} · ${nlDate(current.date)}`;
+  }
+  const until = current.combined_energy_until;
+  return until ? `Vandaag tot ${until.slice(11, 16)}` : `Hele dag · ${nlDate(current.date)}`;
+}
+
+function updateDashboard(range) {
+  const tiles = $("dashboard").querySelectorAll(".tile");
+  if (!current) {
+    $("dashboard-period").textContent = "";
+    tiles.forEach(tile => {
+      tile.querySelector(".tile-value").textContent = "—";
+      tile.querySelector(".meter span").style.width = "0";
+      tile.querySelectorAll("dd").forEach(dd => dd.textContent = "—");
+    });
+    return;
+  }
+  $("dashboard-period").textContent = periodLabel(range);
+  tiles.forEach(tile => {
+    const id = tile.dataset.park;
+    const stats = periodStats(id, range);
+    const facts = Object.fromEntries([...tile.querySelectorAll("dd")].map(dd => [dd.dataset.fact, dd]));
+    tile.querySelector(".tile-value").textContent = stats.energy === null ? "onbekend" : energyText(stats.energy);
+    tile.querySelector(".meter span").style.width = `${Math.min(100, (stats.factor ?? 0) * 100)}%`;
+    facts.hours.textContent = stats.energy === null ? "—" : format(stats.energy / ratedMW(id), 1);
+    facts.mean.textContent = stats.mean === null ? "—" : `${format(stats.mean)} MW`;
+    facts.peak.textContent = stats.peak === null ? "—" : `${format(stats.peak)} MW om ${stats.peakAt.slice(11, 16)}`;
+    facts.factor.textContent = stats.factor === null ? "—" : `${format(stats.factor * 100, 0)} %`;
   });
 }
 
@@ -346,6 +415,7 @@ function clearCharts() {
   charts.querySelectorAll(".range button").forEach(el => el.hidden = true);
   charts.querySelectorAll(".plot,.windplot").forEach(el => el.replaceChildren());
   charts.querySelectorAll(".energy").forEach(el => el.textContent = "—");
+  updateDashboard(null);
 }
 
 async function load() {
@@ -358,6 +428,7 @@ async function load() {
   busy = true;
   current = null;
   controls();
+  updateDashboard(null);
   $("status").textContent = "KNMI-metingen ophalen en minuutprofiel berekenen…";
   try {
     const data = await request("/api/profile?" + parameters());

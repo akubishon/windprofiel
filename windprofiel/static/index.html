@@ -30,6 +30,47 @@
     </section>
 
     <p id="status" role="status" aria-live="polite">App starten… Geen verandering? Start de Python-webserver zoals beschreven in de README.</p>
+    <section class="dashboard" id="dashboard" aria-label="Productieoverzicht">
+      <div class="dashboard-head">
+        <h2>Geschatte productie</h2>
+        <span id="dashboard-period"></span>
+      </div>
+      <div class="tiles">
+        <article class="tile" data-park="fryslan">
+          <div class="tile-label">Windpark Fryslân</div>
+          <div class="tile-value">—</div>
+          <div class="meter" aria-hidden="true"><span></span></div>
+          <dl class="tile-facts">
+            <div><dt>Vollasturen</dt><dd data-fact="hours">—</dd></div>
+            <div><dt>Gemiddeld</dt><dd data-fact="mean">—</dd></div>
+            <div><dt>Piek</dt><dd data-fact="peak">—</dd></div>
+            <div><dt>Benutting</dt><dd data-fact="factor">—</dd></div>
+          </dl>
+        </article>
+        <article class="tile" data-park="beabuorren">
+          <div class="tile-label">Wynpark Beabuorren</div>
+          <div class="tile-value">—</div>
+          <div class="meter" aria-hidden="true"><span></span></div>
+          <dl class="tile-facts">
+            <div><dt>Vollasturen</dt><dd data-fact="hours">—</dd></div>
+            <div><dt>Gemiddeld</dt><dd data-fact="mean">—</dd></div>
+            <div><dt>Piek</dt><dd data-fact="peak">—</dd></div>
+            <div><dt>Benutting</dt><dd data-fact="factor">—</dd></div>
+          </dl>
+        </article>
+        <article class="tile total" data-park="combined">
+          <div class="tile-label">Samen</div>
+          <div class="tile-value">—</div>
+          <div class="meter" aria-hidden="true"><span></span></div>
+          <dl class="tile-facts">
+            <div><dt>Vollasturen</dt><dd data-fact="hours">—</dd></div>
+            <div><dt>Gemiddeld</dt><dd data-fact="mean">—</dd></div>
+            <div><dt>Piek</dt><dd data-fact="peak">—</dd></div>
+            <div><dt>Benutting</dt><dd data-fact="factor">—</dd></div>
+          </dl>
+        </article>
+      </div>
+    </section>
     <noscript>Schakel JavaScript in om de KNMI-data en grafieken te laden.</noscript>
     <aside class="notice">Minuutwaarden zijn schattingen uit tienminutengemiddelden. Dit is geen gemeten elektriciteitsproductie.</aside>
     <aside class="notice" id="preview-notice" hidden>
