@@ -197,6 +197,15 @@ van die dag vrijwel vol vermogen, ~9,1 GWh) en 7 juli 2025 (1,3 GWh; ook met
 stilstand, die dit model niet kent. Het model geeft de productie die met de wind
 mogelijk is, niet wat het park werkelijk levert.
 
+5 oktober 2025 (circa 2,8 GWh) is ook niet meegenomen voor de dagtotalen: tot
+17 uur leverde het park ~5 MWh per uur bij 9 tot 14 m/s op 10 meter, wat op
+afregeling wijst. Van 17 tot 24 uur draaide het park op vol vermogen (~2,6 GWh),
+het model geeft daar met `α = 0,12` 1,8 GWh. Vooral 21–24 uur blijft te laag: na
+zonsondergang wordt de lucht stabiel en neemt de wind sterker toe met de hoogte.
+Ook de nachturen van 20 juli liggen hoger dan het model. Een aparte nachtexponent
+(circa +0,12) verbetert die uren, maar maakt de decemberdagen 20 tot 60 % te hoog;
+met de huidige data is dat niet verantwoord en daarom niet ingebouwd.
+
 **Dit is een kleine steekproef**: vier winter- en twee zomerdagen. Voorjaar en
 herfst zijn niet gecontroleerd; daar is de cosinus een interpolatie. De
 seizoensformule is empirisch en beschrijft niet het weer van de dag: een
