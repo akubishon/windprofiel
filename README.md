@@ -76,9 +76,12 @@ CSV-download en broninformatie. Per park staan de vollasturen van de dag naast
 de dagopbrengst. Sleep in een vermogensgrafiek om een tijdvak te selecteren: alle
 drie de kaarten tonen dan opbrengst, vollasturen en gemiddeld vermogen van dat
 tijdvak. Klik zonder slepen of gebruik **Wis selectie** om terug te gaan.
-Vandaag toont de metingen tot nu (KNMI loopt circa een kwartier achter); de
+De webapp opent op vandaag. Vandaag toont de metingen tot nu (KNMI loopt circa een kwartier achter); de
 opbrengst geldt dan tot het laatste meetmoment. Klik **Profiel ophalen** voor
-nieuwe metingen. Dagen van de laatste 24 uur worden niet gecachet. CSV-velden voor ontbrekend vermogen blijven leeg.
+nieuwe metingen. Dagen van de laatste 24 uur worden niet gecachet. Datums staan overal als dd-mm-jjjj (typ bijvoorbeeld 11-10-2026). De CSV is
+in Nederlandse notatie voor Excel: puntkomma als scheidingsteken, decimale komma
+en tijden als `11-10-2026 13:05`; in het dubbele uur bij de wintertijdwissel
+staat `zomertijd` of `wintertijd` erachter. CSV-velden voor ontbrekend vermogen blijven leeg.
 Bekijk [bronnen, rekenwijze en validatie](docs/databronnen.md) voor alle aannames.
 
 ## Controle

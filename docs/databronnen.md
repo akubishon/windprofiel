@@ -96,8 +96,11 @@ en bevatten geen Authorization-header of sleutel. Cachebestanden zijn niet track
 Standaard gebruikt Fryslân **Houtribdijk** (`0-20000-0-06258`, 5.4006° E, 52.6481° N)
 als IJsselmeerproxy; dit station sloot het best aan op productiedata (zie
 [rekenmodel, sectie 7](rekenmodel.md#7-ijking-op-productiedata-fryslân)). Stavoren
-(`0-20000-0-06267`) is dichterbij maar gaf structureel te weinig wind. Beabuorren gebruikt **Leeuwarden Airport** (`0-20000-0-06270`,
-5.7517° E, 53.2231° N) als regionale landproxy. Beide identifiers zijn afkomstig
+(`0-20000-0-06267`) is dichterbij maar gaf structureel te weinig wind. Beabuorren gebruikt standaard **Stavoren** (`0-20000-0-06267`,
+5.3833° E, 52.8967° N), het dichtstbijzijnde KNMI-station: 18,8 km van het park
+(53,052° N, 5,493° E, volgens [The Wind Power](https://www.thewindpower.net/windfarm_en_6263_beabuorren.php),
+"precise localization"). Leeuwarden Airport (`0-20000-0-06270`), eerder de
+standaard, ligt op 25,7 km. Voor Beabuorren is geen station geijkt op productiedata. Beide identifiers zijn afkomstig
 uit de actuele EDR-stationslijst en zijn voor de gecontroleerde dagen bruikbaar.
 Er zijn geen KNMI-metingen in de turbinegondels gebruikt. Een andere stationkeuze
 is mogelijk in de webapp; afstand, windrichting en lokale omgeving beïnvloeden
@@ -155,15 +158,16 @@ Controle vanuit `/workspace/windprofiel`:
 python3 -m unittest discover -s tests -v
 ```
 
-Achttien lokale tests slagen. De unit-tests gebruiken nagebootste antwoorden
+27 lokale tests slagen. De unit-tests gebruiken nagebootste antwoorden
 en synthetische testcurves; die testcurves staan niet in de applicatiedata.
-Daarnaast zijn daadwerkelijke EDR-dagprofielen voor beide stations gecontroleerd:
+Daarnaast zijn daadwerkelijke EDR-dagprofielen gecontroleerd met de huidige standaardstations
+(Houtribdijk voor Fryslân, Stavoren voor Beabuorren) en zogverlies:
 
 | Datum | Minuten | Ontbrekende windminuten per station | Fryslân (scenario) | Beabuorren (secundaire curve) | Samen |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 2025-01-15 | 1.440 | 0 | 135,103 MWh | 3,026 MWh | 138,129 MWh |
-| 2025-03-30 | 1.380 | 0 | 8.802,100 MWh | 232,728 MWh | 9.034,828 MWh |
-| 2025-10-26 | 1.500 | 0 | 9.391,474 MWh | 241,546 MWh | 9.633,020 MWh |
+| 2025-01-15 | 1.440 | 0 | 270,993 MWh | 5,972 MWh | 276,965 MWh |
+| 2025-03-30 | 1.380 | 0 | 8.802,078 MWh | 238,650 MWh | 9.040,728 MWh |
+| 2025-10-26 | 1.500 | 0 | 9.440,290 MWh | 255,209 MWh | 9.695,499 MWh |
 
 Dit zijn modeluitkomsten, geen bevestigde parkproductie. De eerdere ontbrekende
 Fryslân-curve wordt nu vervangen door het expliciet gekozen scenario. Er is geen
