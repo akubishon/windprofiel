@@ -104,6 +104,15 @@ P_\mathrm{samen}(t)=P_\mathrm{Fryslân}(t)+P_\mathrm{Beabuorren}(t)
 E_\mathrm{dag}[\mathrm{MWh}]\approx\sum_t\frac{P_\mathrm{minuut}(t)[\mathrm{MW}]}{60}
 \]
 
+\[
+\mathrm{vollasturen}=\frac{E[\mathrm{MWh}]}{P_\mathrm{nominaal}[\mathrm{MW}]}
+\]
+
+Vollasturen zijn het aantal uren dat het park op vol vermogen had moeten draaien
+voor dezelfde opbrengst: 382,7 MW voor Fryslân, 10,4 MW voor Beabuorren en
+393,1 MW samen. Voor een geselecteerd tijdvak gelden dezelfde formules, met de
+som alleen over de gekozen minuten.
+
 `N` is 89 voor Fryslân en 8 voor Beabuorren. Elke minuut duurt 1/60 uur. Alle
 turbines van een park krijgen dezelfde modelwind; zogverlies staat in sectie 5. Stilstand,
 afregeling, luchtdichtheidcorrectie en individuele turbineverschillen zijn
