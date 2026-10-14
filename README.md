@@ -2,8 +2,8 @@
 
 Lokale webapp die per dag het geschatte vermogen toont van **Windpark Fryslân**,
 **Wynpark Beabuorren** en beide samen, berekend uit KNMI-windmetingen. Kies een
-dag van 1 november 2021 (Windpark Fryslân volledig in bedrijf) tot en met vandaag. Het is een indicatief model, geen
-gemeten productie.
+dag van 1 november 2021 (Windpark Fryslân volledig in bedrijf) tot en met
+vandaag. Het is een indicatief model, geen gemeten productie.
 
 ## Snel bekijken
 
