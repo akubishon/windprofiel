@@ -52,7 +52,7 @@ function chart(container, values, stamps, unit, emptyMessage, colour = "#32876c"
     const index = (Date.parse(point.timestamp) - start) / 60000;
     if(point.value === null || index < 0 || index > values.length-1) return;
     const dot = svgElement("circle", {class:"reference-point", cx:x(index), cy:y(point.value), r:2.6, fill:"white", stroke:colour, "stroke-width":1.5});
-    dot.append(svgElement("title", {}, `${point.timestamp} · ${format(point.value,3)} ${unit} · ${unit==="MW"?"berekend uit KNMI-tienminutengemiddelde":"KNMI-tienminutengemiddelde"}`));
+    dot.append(svgElement("title", {}, `${nlMoment(point.timestamp)} · ${format(point.value,3)} ${unit} · ${unit==="MW"?"berekend uit KNMI-tienminutengemiddelde":"KNMI-tienminutengemiddelde"}`));
     svg.append(dot);
   });
   const cursor = svgElement("line", {y1:top, y2:H-bottom, stroke:colour, visibility:"hidden"});
@@ -123,6 +123,21 @@ function showEnergy(element, energy, id, until=null) {
   small.textContent=energy===null?label:`${format(energy/ratedMW(id),1)} VOLLASTUREN · ${label}`;
   element.append(small);
 }
+// Nederlandse notatie in beeld (dd-mm-jjjj); intern blijft de datum ISO (jjjj-mm-dd).
+function nlDate(iso) {
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  return `${d}-${m}-${y}`;
+}
+function nlMoment(timestamp) {
+  return `${nlDate(timestamp)} ${timestamp.slice(11, 16)}`;
+}
+function parseNlDate(text) {
+  const match = text.trim().match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (!match) return null;
+  const iso = `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+  const check = new Date(iso + "T12:00:00Z");
+  return !isNaN(check) && check.toISOString().slice(0, 10) === iso ? iso : null;
+}
 function today() {
   return new Intl.DateTimeFormat("sv-SE", {timeZone: "Europe/Amsterdam"}).format(new Date());
 }
@@ -167,7 +182,8 @@ function parameters() {
   return params;
 }
 async function load() {
-  if (!$("date").checkValidity() || !$("date").value) {$("status").textContent="Kies een geldige datum vanaf 1 januari 2025 tot en met vandaag.";return;}
+  $("date-text").value = $("date").value ? nlDate($("date").value) : "";
+  if (!$("date").checkValidity() || !$("date").value) {$("status").textContent=`Kies een geldige datum (dd-mm-jjjj) van 01-01-2025 tot en met ${nlDate(today())}.`;return;}
   const call = ++sequence;
   busy = true; current = null; controls();
   $("status").textContent="KNMI-metingen ophalen en minuutprofiel berekenen…";
@@ -192,7 +208,7 @@ async function load() {
     setSelection(null);
     $("method").textContent=data.method;
     const missing=ids.filter(id=>!data.parks[id].curve);
-    $("status").textContent=`${data.date} · ${format(data.minutes,0)} minuten · Europe/Amsterdam. ${missing.length?"Wind opgehaald; vermogen nog onvolledig door ontbrekende curve.":"Profielen berekend."}${data.date===today()&&!window.WINDPROFIEL_PREVIEW?" Vandaag: metingen tot nu; klik Profiel ophalen voor nieuwe metingen.":""}${window.WINDPROFIEL_PREVIEW?" Opgeslagen KNMI-voorbeeld; geen live aanvraag.":""}`;
+    $("status").textContent=`${nlDate(data.date)} · ${format(data.minutes,0)} minuten · Europe/Amsterdam. ${missing.length?"Wind opgehaald; vermogen nog onvolledig door ontbrekende curve.":"Profielen berekend."}${data.date===today()&&!window.WINDPROFIEL_PREVIEW?" Vandaag: metingen tot nu; klik Profiel ophalen voor nieuwe metingen.":""}${window.WINDPROFIEL_PREVIEW?" Opgeslagen KNMI-voorbeeld; geen live aanvraag.":""}`;
   } catch(error) {
     if(call===sequence){$("status").textContent=error.message;$("charts").querySelectorAll(".range span").forEach(el=>el.textContent="");$("charts").querySelectorAll(".range button").forEach(el=>el.hidden=true);$("charts").querySelectorAll(".plot,.windplot").forEach(el=>el.replaceChildren());$("charts").querySelectorAll(".energy").forEach(el=>el.textContent="—");}
   } finally {if(call===sequence){busy=false;controls();}}
@@ -202,7 +218,13 @@ $("previous").addEventListener("click",()=>moveDay(-1));$("next").addEventListen
 $("date").max=today();
 // De webapp opent op vandaag; de zelfstandige voorbeeldpagina op haar eerste opgeslagen dag.
 if(!window.WINDPROFIEL_PREVIEW) $("date").value=today();
-$("date").addEventListener("change",load);$("refresh").addEventListener("click",load);
+$("date").addEventListener("change",load);
+$("date-text").addEventListener("change",()=>{
+  const iso=parseNlDate($("date-text").value);
+  if(!iso||iso<$("date").min||iso>$("date").max){$("status").textContent=`Kies een geldige datum (dd-mm-jjjj) van 01-01-2025 tot en met ${nlDate(today())}.`;return;}
+  $("date").value=iso;load();
+});
+$("calendar").addEventListener("click",()=>{try{$("date").showPicker();}catch{$("date").focus();}});$("refresh").addEventListener("click",load);
 $("export").addEventListener("click",async()=>{
   if(!current)return;
   // Download de getoonde reeksen, zonder opnieuw de API te raadplegen.
@@ -210,7 +232,7 @@ $("export").addEventListener("click",async()=>{
   const rows=[["tijd_Europe_Amsterdam","fryslan_wind_10m_ms","beabuorren_wind_10m_ms","fryslan_wind_ashoogte_ms","beabuorren_wind_ashoogte_ms","fryslan_geschat_MW","beabuorren_geschat_MW","gecombineerd_geschat_MW"]];
   current.timestamps.forEach((t,i)=>rows.push([t,a.wind_ms[i],b.wind_ms[i],a.hub_wind_ms[i],b.hub_wind_ms[i],a.power_mw[i],b.power_mw[i],current.combined_mw[i]]));
   const blob=new Blob([rows.map(row=>row.map(v=>v===null?"":v).join(",")).join("\r\n")],{type:"text/csv;charset=utf-8"});
-  const url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download=`windprofiel-${current.date}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download=`windprofiel-${nlDate(current.date)}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
 ids.forEach(id=>{
   $("station-"+id).addEventListener("change",load);
@@ -234,7 +256,7 @@ async function init(){
       ids.forEach(id=>{$("station-"+id).disabled=true;$("curve-"+id).disabled=true;});
       $("wake").disabled=true;
       Object.keys(window.WINDPROFIEL_PREVIEW.profiles).forEach(day=>{
-        const button=document.createElement("button");button.textContent=day;
+        const button=document.createElement("button");button.textContent=nlDate(day);
         button.addEventListener("click",()=>{$("date").value=day;load();});
         $("preview-days").append(button);
       });

@@ -10,9 +10,11 @@
     <header><div class="eyebrow">WINDENERGIE · FRYSLÂN</div><h1>Een dag in de wind.</h1>
       <p>Bekijk het geschatte vermogen van twee windparken, op basis van historische KNMI-metingen.</p></header>
     <section class="toolbar" aria-label="Datum kiezen">
-      <div><label for="date">Geselecteerde dag</label><div class="date-controls">
+      <div><label for="date-text">Geselecteerde dag</label><div class="date-controls">
         <button id="previous" aria-label="Vorige dag">←</button>
-        <input id="date" type="date" min="2025-01-01" value="2025-01-15">
+        <input id="date-text" type="text" inputmode="numeric" placeholder="dd-mm-jjjj" size="10" autocomplete="off">
+        <button id="calendar" type="button" aria-label="Kalender openen">📅</button>
+        <input id="date" class="picker" type="date" min="2025-01-01" value="2025-01-15" tabindex="-1" aria-hidden="true">
         <button id="next" aria-label="Volgende dag">→</button></div></div>
       <button id="refresh">Profiel ophalen</button><button id="export" disabled>Download CSV</button>
     </section>
