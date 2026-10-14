@@ -3,7 +3,7 @@ import unittest
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
-from windprofiel.application import PARKS, build_profile, day_energy, shear_exponent, interpolate_minutes, parse_wind, park_power_mw, validate_curve
+from windprofiel.application import PARKS, build_profile, csv_rows, day_energy, nl_number, nl_time, shear_exponent, interpolate_minutes, parse_wind, park_power_mw, validate_curve
 from windprofiel.knmi import KNMIError
 
 
@@ -123,3 +123,17 @@ class DayEnergyTests(unittest.TestCase):
         self.assertEqual(day_energy([60, 120, None, None], stamps, False), (None, None))
         self.assertEqual(day_energy([60, None, 60, None], stamps, True), (None, None))
         self.assertEqual(day_energy([None] * 4, stamps, True), (None, None))
+
+
+class DutchCsvTests(unittest.TestCase):
+    def test_dates_and_decimal_comma(self):
+        self.assertEqual(nl_time("2026-10-11T13:05:00+02:00"), "11-10-2026 13:05")
+        self.assertEqual(nl_time("2025-10-26T02:30:00+02:00", True), "26-10-2025 02:30 zomertijd")
+        self.assertEqual(nl_time("2025-10-26T02:30:00+01:00", True), "26-10-2025 02:30 wintertijd")
+        self.assertEqual([nl_number(v) for v in (None, 0, 3.2000000000000006, 382.7, 1e-9)], ["", "0", "3,2", "382,7", "0"])
+
+    def test_csv_rows(self):
+        park = lambda v: {"wind_ms": [v], "hub_wind_ms": [v], "power_mw": [None]}
+        profile = {"minutes": 1440, "timestamps": ["2026-01-08T00:00:00+01:00"], "combined_mw": [None],
+                   "parks": {"fryslan": park(5.5), "beabuorren": park(4.0)}}
+        self.assertEqual(csv_rows(profile)[1], ["08-01-2026 00:00", "5,5", "4", "5,5", "4", "", "", ""])

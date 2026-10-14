@@ -172,6 +172,36 @@ def day_energy(power: list[float | None], timestamps: list[str], running: bool) 
     return sum(power[:known]) / 60, timestamps[known - 1]
 
 
+CSV_HEADER = ["tijd_Europe_Amsterdam", "fryslan_wind_10m_ms", "beabuorren_wind_10m_ms",
+              "fryslan_wind_ashoogte_ms", "beabuorren_wind_ashoogte_ms",
+              "fryslan_geschat_MW", "beabuorren_geschat_MW", "gecombineerd_geschat_MW"]
+
+
+def nl_time(timestamp: str, repeated_hour: bool = False) -> str:
+    """dd-mm-jjjj uu:mm; in het dubbele uur bij de wintertijdwissel met zomer- of wintertijd."""
+    text = f"{timestamp[8:10]}-{timestamp[5:7]}-{timestamp[0:4]} {timestamp[11:16]}"
+    if repeated_hour and timestamp[11:13] == "02":
+        text += " zomertijd" if timestamp.endswith("+02:00") else " wintertijd"
+    return text
+
+
+def nl_number(value: float | None) -> str:
+    """Zes decimalen, zonder overbodige nullen en met decimale komma."""
+    return "" if value is None else (f"{value:.6f}".rstrip("0").rstrip(".") or "0").replace(".", ",")
+
+
+def csv_rows(profile: dict) -> list[list[str]]:
+    """CSV in Nederlandse notatie: datum dd-mm-jjjj en decimale komma (scheidingsteken ;)."""
+    a, b = profile["parks"]["fryslan"], profile["parks"]["beabuorren"]
+    repeated = profile["minutes"] > 1440
+    rows = [CSV_HEADER]
+    for i, timestamp in enumerate(profile["timestamps"]):
+        values = (a["wind_ms"][i], b["wind_ms"][i], a["hub_wind_ms"][i], b["hub_wind_ms"][i],
+                  a["power_mw"][i], b["power_mw"][i], profile["combined_mw"][i])
+        rows.append([nl_time(timestamp, repeated)] + [nl_number(v) for v in values])
+    return rows
+
+
 def build_profile(day: date, stations: dict[str, str] | None = None, client: KNMIClient | None = None,
                   wake: bool = True) -> dict:
     moments = day_minutes(day)

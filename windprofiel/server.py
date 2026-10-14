@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from .application import PARKS, ROOT, build_profile, validate_curve
+from .application import PARKS, ROOT, build_profile, csv_rows, validate_curve
 from .knmi import KNMIClient, KNMIError, load_env_file
 
 STATIC = Path(__file__).parent / "static"
@@ -52,15 +52,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.json_response(200, profile)
                 return
             output = io.StringIO()
-            writer = csv.writer(output)
-            writer.writerow(["tijd_Europe_Amsterdam", "fryslan_wind_10m_ms", "beabuorren_wind_10m_ms",
-                             "fryslan_wind_ashoogte_ms", "beabuorren_wind_ashoogte_ms",
-                             "fryslan_geschat_MW", "beabuorren_geschat_MW", "gecombineerd_geschat_MW"])
-            a, b = profile["parks"]["fryslan"], profile["parks"]["beabuorren"]
-            for i, timestamp in enumerate(profile["timestamps"]):
-                writer.writerow([timestamp, a["wind_ms"][i], b["wind_ms"][i], a["hub_wind_ms"][i], b["hub_wind_ms"][i],
-                                 a["power_mw"][i], b["power_mw"][i], profile["combined_mw"][i]])
-            self.respond(200, output.getvalue().encode(), "text/csv; charset=utf-8")
+            csv.writer(output, delimiter=";").writerows(csv_rows(profile))
+            self.respond(200, output.getvalue().encode("utf-8-sig"), "text/csv; charset=utf-8")
         except KNMIError as exc:
             self.json_response(502, {"error": str(exc)})
         except (ValueError, TypeError):

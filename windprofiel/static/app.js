@@ -228,10 +228,13 @@ $("calendar").addEventListener("click",()=>{try{$("date").showPicker();}catch{$(
 $("export").addEventListener("click",async()=>{
   if(!current)return;
   // Download de getoonde reeksen, zonder opnieuw de API te raadplegen.
-  const a=current.parks.fryslan,b=current.parks.beabuorren;
+  // Zelfde Nederlandse notatie als csv_rows in application.py: dd-mm-jjjj, decimale komma, puntkomma.
+  const a=current.parks.fryslan,b=current.parks.beabuorren,repeated=current.minutes>1440;
+  const time=t=>nlMoment(t)+(repeated&&t.slice(11,13)==="02"?(t.endsWith("+02:00")?" zomertijd":" wintertijd"):"");
+  const number=v=>v===null?"":(v.toFixed(6).replace(/\.?0+$/,"")||"0").replace(".",",");
   const rows=[["tijd_Europe_Amsterdam","fryslan_wind_10m_ms","beabuorren_wind_10m_ms","fryslan_wind_ashoogte_ms","beabuorren_wind_ashoogte_ms","fryslan_geschat_MW","beabuorren_geschat_MW","gecombineerd_geschat_MW"]];
-  current.timestamps.forEach((t,i)=>rows.push([t,a.wind_ms[i],b.wind_ms[i],a.hub_wind_ms[i],b.hub_wind_ms[i],a.power_mw[i],b.power_mw[i],current.combined_mw[i]]));
-  const blob=new Blob([rows.map(row=>row.map(v=>v===null?"":v).join(",")).join("\r\n")],{type:"text/csv;charset=utf-8"});
+  current.timestamps.forEach((t,i)=>rows.push([time(t),...[a.wind_ms[i],b.wind_ms[i],a.hub_wind_ms[i],b.hub_wind_ms[i],a.power_mw[i],b.power_mw[i],current.combined_mw[i]].map(number)]));
+  const blob=new Blob(["\ufeff"+rows.map(row=>row.join(";")+"\r\n").join("")],{type:"text/csv;charset=utf-8"});
   const url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download=`windprofiel-${nlDate(current.date)}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
 ids.forEach(id=>{
