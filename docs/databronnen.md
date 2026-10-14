@@ -87,17 +87,19 @@ en bevatten geen Authorization-header of sleutel. Cachebestanden zijn niet track
 
 ## Stations en hoogtecorrectie
 
-Standaard gebruikt Fryslân **Stavoren** (`0-20000-0-06267`, 5.3833° E, 52.8967° N)
-als kustproxy. Beabuorren gebruikt **Leeuwarden Airport** (`0-20000-0-06270`,
+Standaard gebruikt Fryslân **Houtribdijk** (`0-20000-0-06258`, 5.4006° E, 52.6481° N)
+als IJsselmeerproxy; dit station sloot het best aan op productiedata (zie
+[rekenmodel, sectie 7](rekenmodel.md#7-ijking-op-productiedata-fryslân)). Stavoren
+(`0-20000-0-06267`) is dichterbij maar gaf structureel te weinig wind. Beabuorren gebruikt **Leeuwarden Airport** (`0-20000-0-06270`,
 5.7517° E, 53.2231° N) als regionale landproxy. Beide identifiers zijn afkomstig
 uit de actuele EDR-stationslijst en zijn voor de gecontroleerde dagen bruikbaar.
 Er zijn geen KNMI-metingen in de turbinegondels gebruikt. Een andere stationkeuze
 is mogelijk in de webapp; afstand, windrichting en lokale omgeving beïnvloeden
 de representativiteit. Een geografisch dichtbij station garandeert geen parkmeting.
 
-Aswind wordt geschat met `v_h = v_10 * (h / 10)^alpha`. De vaste exponenten
-0,10 voor water en 0,20 voor land zijn expliciete scenario-aannames, geen door
-KNMI gemeten lokale verticale profielen. De UI toont deze aannames. De
+Aswind wordt geschat met `v_h = v_10 * (h / 10)^alpha`. De exponent 0,18
+voor Fryslân is geijkt op vier productiedagen; 0,20 voor land is een scenario-
+aanname. Geen van beide is een door KNMI gemeten lokaal verticaal profiel. De UI toont deze aannames. De
 vermogensberekening interpoleert de curve op de geschatte aswind, vermenigvuldigt
 met het turbinaantal en rekent kW om naar MW. Zogverlies is standaard benaderd
 met een vaste snelheidsverlaging per park (zie [rekenmodel](rekenmodel.md#5-zogverlies));

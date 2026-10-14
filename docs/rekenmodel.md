@@ -13,15 +13,16 @@ v_h=v_{10}\left(\frac{h}{10}\right)^\alpha
 
 `v₁₀` is KNMI-variabele `ff`: windsnelheid in m/s, representatief voor 10 meter.
 `h` is de ashoogte in meters. `α` bepaalt de toename met de hoogte. Fryslân
-gebruikt `h = 115 m, α = 0,10`; Beabuorren `h = 60 m, α = 0,20`.
+gebruikt `h = 115 m, α = 0,18`; Beabuorren `h = 60 m, α = 0,20`.
 Deze correctie verandert het niveau van de hele reeks en daarmee, via de
 vermogenscurve, ook de grootte van de schommelingen.
 
 De [wind profile power law](https://en.wikipedia.org/wiki/Wind_profile_power_law)
 beschrijft de empirische formule en de afhankelijkheid van terrein en
 atmosferische stabiliteit. De bron noemt circa 0,11 boven open water in neutrale
-omstandigheden. **0,10 is onze afgeronde scenario-keuze; 0,20 voor land is ook
-een modelkeuze, geen gemeten exponent voor Beabuorren.** Een vaste exponent van
+omstandigheden. In stabiele winterlucht is de toename met de hoogte groter.
+**0,18 voor Fryslân is geijkt op productiedata (sectie 7); 0,20 voor land is een
+modelkeuze, geen gemeten exponent voor Beabuorren.** Een vaste exponent van
 10 naar 115 meter kan aanzienlijke onzekerheid geven. De formule corrigeert
 alleen hoogte, niet de afstand of terreinverschillen tussen station en park.
 
@@ -154,6 +155,35 @@ inschakel- en uitschakelgrenzen blijft er onzekerheid. Het model is bedoeld om
 patronen te verkennen, niet om exacte productie of echte minuutfluctuaties te
 voorspellen.
 
+## 7. IJking op productiedata Fryslân
+
+De oorspronkelijke keuze, Stavoren met `α = 0,10`, gaf voor 4 december 2025
+1,69 GWh terwijl het park ongeveer 4,5 GWh produceerde. Daarom zijn station en
+exponent geijkt op dagopbrengsten uit de app van Windpark Fryslân, met het
+kubische model en 5 % zogverlies:
+
+| Dag | Productie | Model (Houtribdijk, α 0,18) | Oud (Stavoren, α 0,10) |
+| --- | --- | --- | --- |
+| 4 december 2025 | ~4,5 GWh | 4,6 GWh | 1,7 GWh |
+| 18 december 2025 | 8,8 GWh | 8,9 GWh | 7,5 GWh |
+| 19 december 2025 | 5,9 GWh | 5,7 GWh | 1,9 GWh |
+| 28 december 2025 | 0,78 GWh | 0,55 GWh | 0,03 GWh |
+
+Gezocht is over zeven stations binnen 45 km en `α` van 0,05 tot 0,40. Houtribdijk
+gaf de kleinste afwijking (circa 180 MWh RMS); Stavoren haalde op zijn best
+circa 600 MWh, met een veel hogere exponent. Houtribdijk ligt midden in het
+IJsselmeer en vangt vermoedelijk de wind boven open water beter dan het
+kuststation Stavoren.
+
+1 januari 2026 (6,7 GWh) is niet meegenomen: de wind was de hele dag even sterk
+als op 18 december en elk model geeft vrijwel vol vermogen (~9,1 GWh). Het
+verschil past bij afregeling of stilstand, die dit model niet kent.
+
+**Vier dagen is een kleine steekproef**, alle in de winter. Op stabiele
+winterdagen is de exponent hoger dan in een onstabiele zomer, dus in de zomer
+kan het model overschatten. Meer productiedagen uit andere seizoenen zijn nodig
+om dit te controleren.
+
 ## Bronnen en status van de getallen
 
 | Gegeven | Waarde | Onderbouwing |
@@ -162,7 +192,8 @@ voorspellen.
 | Fryslân | 89 × 4,3 MW | [Exploitant](https://www.windparkfryslan.nl/onderwerpen/windturbines/) |
 | Fryslân-ashoogte | circa 115 m | Afgeleid: 180 m tiphoogte − 130 m rotordiameter / 2, [factsheet](https://www.windparkfryslan.nl/wp-content/uploads/2020/05/Factsheet-Windpark-Fryslan.pdf) |
 | Fryslân-grenzen | 3 / 11,5 / 25 m/s | Afgesproken scenario-keuze; niet bevestigd door fabrikant |
-| Hoogte-exponenten | 0,10 water / 0,20 land | Onze vaste modelkeuzes; [achtergrond en beperkingen](https://en.wikipedia.org/wiki/Wind_profile_power_law) |
+| Hoogte-exponenten | 0,18 Fryslân / 0,20 land | Fryslân geijkt op vier dagen (sectie 7); land is een modelkeuze; [achtergrond](https://en.wikipedia.org/wiki/Wind_profile_power_law) |
+| Fryslân-station | Houtribdijk (`06258`) | Beste aansluiting op productiedata van de vijf IJsselmeer- en kuststations (sectie 7) |
 | Beabuorren | 8 turbines, 10,4 MW | [Onderhoudsbedrijf Rengineers](https://rengineers.eu/nieuw/wynpark-beaborren-25-jaar/) |
 | Beabuorren-model | SWT-1.3-62 | [The Wind Power](https://www.thewindpower.net/windfarm_en_6263_beabuorren.php), secundaire bron |
 | Beabuorren-ashoogte | 60 m | [Lokaal bericht uit 2007](https://tsjerkwert.nl/start-opschaling-van-het-wynpark/); niet bevestigd voor alle acht turbines |
