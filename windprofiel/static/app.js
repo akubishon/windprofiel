@@ -5,6 +5,9 @@ const format = (v, digits = 1) => new Intl.NumberFormat("nl-NL", {maximumFractio
 let current = null;
 let sequence = 0;
 let busy = false;
+// Gekozen tijdvak als minuutindexen (inclusief), gedeeld door alle vermogensgrafieken.
+let selection = null;
+let bands = [];
 const svgNS = "http://www.w3.org/2000/svg";
 function svgElement(tag, attrs = {}, text) {
   const el = document.createElementNS(svgNS, tag);
@@ -12,7 +15,7 @@ function svgElement(tag, attrs = {}, text) {
   if (text !== undefined) el.textContent = text;
   return el;
 }
-function chart(container, values, stamps, unit, emptyMessage, colour = "#32876c", points = []) {
+function chart(container, values, stamps, unit, emptyMessage, colour = "#32876c", points = [], selectable = false) {
   container.replaceChildren();
   const valid = values.filter(v => v !== null);
   if (!valid.length) {
@@ -34,6 +37,10 @@ function chart(container, values, stamps, unit, emptyMessage, colour = "#32876c"
     const index = Math.round((values.length-1)*i/6);
     svg.append(svgElement("text", {x:x(index), y:H-7, "text-anchor":i===0?"start":i===6?"end":"middle"}, stamps[index].slice(11,16)));
   }
+  if (selectable) {
+    const band = svgElement("rect", {y:top, height:H-top-bottom, fill:colour, opacity:0.13, visibility:"hidden"});
+    svg.append(band); bands.push({band, x});
+  }
   let path = "", connected = false;
   values.forEach((v,i) => {
     if (v === null) {connected=false; return;}
@@ -52,9 +59,30 @@ function chart(container, values, stamps, unit, emptyMessage, colour = "#32876c"
   const marker = svgElement("circle", {r:4, fill:colour, visibility:"hidden"});
   const label = svgElement("text", {x:W-right, y:13, "text-anchor":"end"});
   svg.append(cursor, marker, label);
-  svg.addEventListener("pointermove", event => {
+  const indexAt = event => {
     const position = (event.clientX - svg.getBoundingClientRect().left) / svg.getBoundingClientRect().width * W;
-    const index = Math.max(0, Math.min(values.length-1, Math.round((position-left)/(W-left-right)*(values.length-1))));
+    return Math.max(0, Math.min(values.length-1, Math.round((position-left)/(W-left-right)*(values.length-1))));
+  };
+  let dragStart = null;
+  if (selectable) {
+    svg.classList.add("selectable");
+    svg.addEventListener("pointerdown", event => {
+      if (event.button !== 0) return;
+      dragStart = indexAt(event); svg.setPointerCapture(event.pointerId);
+      setSelection({a:dragStart, b:dragStart});
+    });
+    svg.addEventListener("pointerup", event => {
+      if (dragStart === null) return;
+      const index = indexAt(event);
+      // Een klik zonder slepen wist de selectie.
+      setSelection(index === dragStart ? null : {a:Math.min(dragStart,index), b:Math.max(dragStart,index)});
+      dragStart = null;
+    });
+    svg.addEventListener("pointercancel", () => {dragStart = null; setSelection(null);});
+  }
+  svg.addEventListener("pointermove", event => {
+    const index = indexAt(event);
+    if (dragStart !== null) setSelection({a:Math.min(dragStart,index), b:Math.max(dragStart,index)});
     cursor.setAttribute("x1",x(index)); cursor.setAttribute("x2",x(index)); cursor.setAttribute("visibility","visible");
     const value=values[index]; marker.setAttribute("visibility",value===null?"hidden":"visible");
     if(value!==null){marker.setAttribute("cx",x(index));marker.setAttribute("cy",y(value));}
@@ -62,6 +90,37 @@ function chart(container, values, stamps, unit, emptyMessage, colour = "#32876c"
   });
   svg.addEventListener("pointerleave",() => {cursor.setAttribute("visibility","hidden");marker.setAttribute("visibility","hidden");label.textContent="";});
   container.append(svg);
+}
+function ratedMW(id) {
+  if (id === "combined") return ratedMW("fryslan") + ratedMW("beabuorren");
+  const p = current.parks[id]; return p.count * p.rated_kw / 1000;
+}
+function seriesFor(id) {return id === "combined" ? current.combined_mw : current.parks[id].power_mw;}
+function setSelection(range) {
+  selection = range;
+  bands.forEach(({band, x}) => {
+    band.setAttribute("visibility", range ? "visible" : "hidden");
+    if (range) {band.setAttribute("x", x(range.a)); band.setAttribute("width", Math.max(1, x(range.b) - x(range.a)));}
+  });
+  if (!current) return;
+  [...ids, "combined"].forEach(id => {
+    const box = $(id).querySelector(".range"), text = box.querySelector("span"), clear = box.querySelector("button");
+    clear.hidden = !range;
+    if (!range) {text.textContent = "Sleep in de grafiek om een tijdvak te selecteren."; return;}
+    const values = seriesFor(id).slice(range.a, range.b + 1);
+    // Eindtijd in Nederlandse tijd: begin van de minuut na de selectie, of middernacht.
+    const end = current.timestamps[range.b + 1]?.slice(11,16) ?? "24:00";
+    const label = `${current.timestamps[range.a].slice(11,16)}–${end} (${format(values.length/60,2)} u)`;
+    if (values.includes(null)) {text.textContent = `Selectie ${label}: opbrengst onbekend door ontbrekende data.`; return;}
+    const energy = values.reduce((sum, v) => sum + v, 0) / 60;
+    text.textContent = `Selectie ${label}: ${format(energy)} MWh · ${format(energy/ratedMW(id),2)} vollasturen · gemiddeld ${format(energy/(values.length/60))} MW`;
+  });
+}
+function showEnergy(element, energy, id) {
+  element.replaceChildren(document.createTextNode(energy===null?"—":`${format(energy)} MWh`));
+  const small=document.createElement("small");
+  small.textContent=energy===null?"GESCHATTE DAGOPBRENGST":`${format(energy/ratedMW(id),1)} VOLLASTUREN · GESCHATTE DAGOPBRENGST`;
+  element.append(small);
 }
 function controls() {
   $("previous").disabled = busy || $("date").value <= "2025-01-01";
@@ -111,13 +170,11 @@ async function load() {
   try {
     const data = await request("/api/profile?"+parameters());
     if (call !== sequence) return;
-    current = data;
+    current = data; bands = []; selection = null;
     ids.forEach(id => {
       const p = data.parks[id], card=$(id);
-      const energy = card.querySelector(".energy"); energy.replaceChildren();
-      energy.append(document.createTextNode(p.energy_mwh===null?"—":`${format(p.energy_mwh)} MWh`));
-      const small=document.createElement("small");small.textContent="GESCHATTE DAGOPBRENGST";energy.append(small);
-      chart(card.querySelector(".plot"), p.power_mw, data.timestamps, "MW", p.curve?"Vermogen niet beschikbaar: geen bruikbare windmetingen.":"Vermogen nog niet beschikbaar: voeg een curve voor de juiste turbine-uitvoering toe.", "#32876c", p.reference_points.map(point=>({timestamp:point.timestamp,value:point.power_mw})));
+      showEnergy(card.querySelector(".energy"), p.energy_mwh, id);
+      chart(card.querySelector(".plot"), p.power_mw, data.timestamps, "MW", p.curve?"Vermogen niet beschikbaar: geen bruikbare windmetingen.":"Vermogen nog niet beschikbaar: voeg een curve voor de juiste turbine-uitvoering toe.", "#32876c", p.reference_points.map(point=>({timestamp:point.timestamp,value:point.power_mw})), true);
       chart(card.querySelector(".windplot"), p.wind_ms, data.timestamps, "m/s op 10 m", "Geen bruikbare windmetingen.","#749caf", p.reference_points.map(point=>({timestamp:point.timestamp,value:point.wind_ms})));
       card.querySelector(".source").textContent=`KNMI ${p.station.properties.name} · ${p.missing_wind_minutes} ontbrekende windminuten`;
       // Opgeslagen voorbeeldprofielen liggen vast; het vinkje toont hun instelling.
@@ -126,13 +183,14 @@ async function load() {
       const source=card.querySelector(".curve-source");source.replaceChildren();
       if(p.curve){source.append(document.createTextNode(p.curve.status+" "));const link=document.createElement("a");link.href=p.curve.source;link.textContent=p.curve.kind==="cubic_scenario"?"Natuurkundige achtergrond ↗":"Curvebron ↗";link.target="_blank";link.rel="noopener";source.append(link);} else source.textContent="Vermogenscurve ontbreekt; windmetingen zijn wel beschikbaar.";
     });
-    const combined=$("combined");combined.querySelector(".energy").textContent=data.combined_energy_mwh===null?"—":`${format(data.combined_energy_mwh)} MWh`;
-    chart(combined.querySelector(".plot"),data.combined_mw,data.timestamps,"MW","Gecombineerd vermogen vereist een beschikbare curve én winddata voor beide parken.","#32876c",data.combined_reference_points.map(point=>({timestamp:point.timestamp,value:point.power_mw})));
+    const combined=$("combined");showEnergy(combined.querySelector(".energy"),data.combined_energy_mwh,"combined");
+    chart(combined.querySelector(".plot"),data.combined_mw,data.timestamps,"MW","Gecombineerd vermogen vereist een beschikbare curve én winddata voor beide parken.","#32876c",data.combined_reference_points.map(point=>({timestamp:point.timestamp,value:point.power_mw})), true);
+    setSelection(null);
     $("method").textContent=data.method;
     const missing=ids.filter(id=>!data.parks[id].curve);
     $("status").textContent=`${data.date} · ${format(data.minutes,0)} minuten · Europe/Amsterdam. ${missing.length?"Wind opgehaald; vermogen nog onvolledig door ontbrekende curve.":"Profielen berekend."}${window.WINDPROFIEL_PREVIEW?" Opgeslagen KNMI-voorbeeld; geen live aanvraag.":""}`;
   } catch(error) {
-    if(call===sequence){$("status").textContent=error.message;$("charts").querySelectorAll(".plot,.windplot").forEach(el=>el.replaceChildren());$("charts").querySelectorAll(".energy").forEach(el=>el.textContent="—");}
+    if(call===sequence){$("status").textContent=error.message;$("charts").querySelectorAll(".range span").forEach(el=>el.textContent="");$("charts").querySelectorAll(".range button").forEach(el=>el.hidden=true);$("charts").querySelectorAll(".plot,.windplot").forEach(el=>el.replaceChildren());$("charts").querySelectorAll(".energy").forEach(el=>el.textContent="—");}
   } finally {if(call===sequence){busy=false;controls();}}
 }
 function moveDay(delta){const d=new Date($("date").value+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+delta);$("date").value=d.toISOString().slice(0,10);load();}
@@ -183,4 +241,5 @@ async function init(){
 }
 controls();init();
 $("wake").addEventListener("change",load);
+$("charts").querySelectorAll(".range button").forEach(button=>button.addEventListener("click",()=>setSelection(null)));
 $("show-points").addEventListener("change",event=>$("charts").classList.toggle("hide-points",!event.target.checked));

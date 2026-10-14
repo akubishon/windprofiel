@@ -5,7 +5,7 @@
   <title>Windprofiel · Fryslân & Beabuorren</title>
   <style>:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#163c3c;background:#f3f5f2;font-size:15px}*{box-sizing:border-box}body{margin:0}main{max-width:1100px;margin:auto;padding:54px 28px}header{margin-bottom:32px}h1{font-size:clamp(36px,5vw,58px);font-weight:550;letter-spacing:-2px;margin:12px 0}header p{color:#647775;max-width:650px;line-height:1.6}.eyebrow{font-size:11px;letter-spacing:1.8px;font-weight:700;color:#68817b}h2{font-size:23px;letter-spacing:-.6px;margin:8px 0}.toolbar{display:flex;align-items:end;gap:14px;flex-wrap:wrap;background:#fff;border:1px solid #dce5df;border-radius:14px;padding:20px}label{display:block;font-size:12px;font-weight:650;margin:0 0 8px}.date-controls{display:flex;gap:8px}button,input,select{font:inherit;color:inherit;border:1px solid #cbd9d1;border-radius:7px;background:white;padding:10px 13px}button{cursor:pointer}button:hover{background:#edf4ee}button:disabled{cursor:default;opacity:.5}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #91cbb3;outline-offset:3px}#refresh{background:#174d43;color:white;border-color:#174d43}#status{min-height:22px;font-size:13px;color:#57746b}.notice{background:#e7efe7;border-left:3px solid #83a48d;border-radius:4px;padding:12px 16px;font-size:13px;line-height:1.6;margin:20px 0}.card{background:#fff;border:1px solid #dce5df;border-radius:14px;padding:26px;margin:18px 0}.card-head{display:flex;align-items:center;justify-content:space-between;gap:20px}.energy{text-align:right;font-size:22px;font-variant-numeric:tabular-nums}.energy small{display:block;color:#6b807b;font-size:11px;margin-top:6px}.plot{margin:20px -8px 6px}.plot svg,.windplot svg{display:block;width:100%;height:auto}.plot text,.windplot text{font-family:inherit;font-size:11px;fill:#6c837b}.plot .empty{display:grid;place-items:center;min-height:170px;background:#f6f8f5;border:1px dashed #cad8ce;border-radius:8px;text-align:center;padding:24px;color:#73877f}.source{font-size:12px;color:#6b807b;line-height:1.6}.card details{border-top:1px solid #e7ece7;margin-top:16px;padding-top:14px}.card details p{font-size:12px;line-height:1.7;color:#6b807b}summary{cursor:pointer;font-size:13px;font-weight:600}.settings{margin-top:30px;border:1px solid #dce5df;padding:22px;border-radius:12px;background:#f9faf7}.settings p,footer p{line-height:1.7;font-size:13px;color:#6b807b}.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}.settings-grid select{width:100%;margin-bottom:24px}.settings-grid input{max-width:100%;font-size:12px}code{font-size:12px}footer{margin:32px 0;color:#6b807b;font-size:12px}a{color:#367964}.windplot{margin-top:18px}@media(max-width:600px){main{padding:30px 16px}.card{padding:18px}.card-head{align-items:start}.energy{font-size:17px}.settings-grid{grid-template-columns:1fr}h2{font-size:20px}.toolbar{padding:15px}}
 
-.formula{background:#edf3ed;border-radius:7px;padding:15px 18px;font-size:14px;line-height:2;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}.point-toggle{font-size:12px;font-weight:400;line-height:1.6}.point-toggle input{vertical-align:middle;accent-color:#32876c}.hide-points .reference-point{display:none}.settings h3{font-size:16px;margin-top:26px}
+.formula{background:#edf3ed;border-radius:7px;padding:15px 18px;font-size:14px;line-height:2;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}.point-toggle{font-size:12px;font-weight:400;line-height:1.6}.point-toggle input{vertical-align:middle;accent-color:#32876c}.hide-points .reference-point{display:none}.settings h3{font-size:16px;margin-top:26px}.plot svg.selectable{cursor:crosshair;touch-action:pan-y;user-select:none}.range{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;min-height:34px;font-size:13px;color:#57746b;font-variant-numeric:tabular-nums;margin-bottom:6px}.range button{padding:5px 11px;font-size:12px}
 </style>
 </head>
 <body>
@@ -26,9 +26,9 @@
     <label class="point-toggle"><input type="checkbox" id="show-points" checked> Toon tienminutenpunten · vermogen berekend uit de oorspronkelijke windgemiddelden</label>
     <label class="point-toggle"><input type="checkbox" id="wake" checked> Zogverlies meenemen · scenario: wind 5 % lager in Fryslân, 2 % in Beabuorren</label>
     <div id="charts">
-      <section class="card" id="fryslan"><div class="card-head"><div><span class="eyebrow">89 TURBINES · 382,7 MW</span><h2>Windpark Fryslân</h2></div><div class="energy">—</div></div><div class="plot"></div><div class="source"></div><details><summary>Wind en modelaannames</summary><div class="windplot"></div><p class="assumptions"></p><p class="curve-source"></p></details></section>
-      <section class="card" id="beabuorren"><div class="card-head"><div><span class="eyebrow">8 TURBINES · 10,4 MW</span><h2>Wynpark Beabuorren</h2></div><div class="energy">—</div></div><div class="plot"></div><div class="source"></div><details><summary>Wind en modelaannames</summary><div class="windplot"></div><p class="assumptions"></p><p class="curve-source"></p></details></section>
-      <section class="card" id="combined"><div class="card-head"><div><span class="eyebrow">BEIDE PARKEN · 393,1 MW</span><h2>Gecombineerd vermogen</h2></div><div class="energy">—</div></div><div class="plot"></div><p class="source">De som van beide parken op hetzelfde tijdstip.</p></section>
+      <section class="card" id="fryslan"><div class="card-head"><div><span class="eyebrow">89 TURBINES · 382,7 MW</span><h2>Windpark Fryslân</h2></div><div class="energy">—</div></div><div class="plot"></div><div class="range"><span></span><button type="button" hidden>Wis selectie</button></div><div class="source"></div><details><summary>Wind en modelaannames</summary><div class="windplot"></div><p class="assumptions"></p><p class="curve-source"></p></details></section>
+      <section class="card" id="beabuorren"><div class="card-head"><div><span class="eyebrow">8 TURBINES · 10,4 MW</span><h2>Wynpark Beabuorren</h2></div><div class="energy">—</div></div><div class="plot"></div><div class="range"><span></span><button type="button" hidden>Wis selectie</button></div><div class="source"></div><details><summary>Wind en modelaannames</summary><div class="windplot"></div><p class="assumptions"></p><p class="curve-source"></p></details></section>
+      <section class="card" id="combined"><div class="card-head"><div><span class="eyebrow">BEIDE PARKEN · 393,1 MW</span><h2>Gecombineerd vermogen</h2></div><div class="energy">—</div></div><div class="plot"></div><div class="range"><span></span><button type="button" hidden>Wis selectie</button></div><p class="source">De som van beide parken op hetzelfde tijdstip.</p></section>
     </div>
     <details class="settings"><summary>Meetstations en vermogenscurves</summary>
       <p>Meetstations liggen buiten de parken. De standaardkeuze gebruikt Houtribdijk voor het IJsselmeer (geijkt op productiedagen) en Leeuwarden voor land. Je kunt per park een ander station kiezen.</p>
@@ -72,6 +72,9 @@ const format = (v, digits = 1) => new Intl.NumberFormat("nl-NL", {maximumFractio
 let current = null;
 let sequence = 0;
 let busy = false;
+// Gekozen tijdvak als minuutindexen (inclusief), gedeeld door alle vermogensgrafieken.
+let selection = null;
+let bands = [];
 const svgNS = "http://www.w3.org/2000/svg";
 function svgElement(tag, attrs = {}, text) {
   const el = document.createElementNS(svgNS, tag);
@@ -79,7 +82,7 @@ function svgElement(tag, attrs = {}, text) {
   if (text !== undefined) el.textContent = text;
   return el;
 }
-function chart(container, values, stamps, unit, emptyMessage, colour = "#32876c", points = []) {
+function chart(container, values, stamps, unit, emptyMessage, colour = "#32876c", points = [], selectable = false) {
   container.replaceChildren();
   const valid = values.filter(v => v !== null);
   if (!valid.length) {
@@ -101,6 +104,10 @@ function chart(container, values, stamps, unit, emptyMessage, colour = "#32876c"
     const index = Math.round((values.length-1)*i/6);
     svg.append(svgElement("text", {x:x(index), y:H-7, "text-anchor":i===0?"start":i===6?"end":"middle"}, stamps[index].slice(11,16)));
   }
+  if (selectable) {
+    const band = svgElement("rect", {y:top, height:H-top-bottom, fill:colour, opacity:0.13, visibility:"hidden"});
+    svg.append(band); bands.push({band, x});
+  }
   let path = "", connected = false;
   values.forEach((v,i) => {
     if (v === null) {connected=false; return;}
@@ -119,9 +126,30 @@ function chart(container, values, stamps, unit, emptyMessage, colour = "#32876c"
   const marker = svgElement("circle", {r:4, fill:colour, visibility:"hidden"});
   const label = svgElement("text", {x:W-right, y:13, "text-anchor":"end"});
   svg.append(cursor, marker, label);
-  svg.addEventListener("pointermove", event => {
+  const indexAt = event => {
     const position = (event.clientX - svg.getBoundingClientRect().left) / svg.getBoundingClientRect().width * W;
-    const index = Math.max(0, Math.min(values.length-1, Math.round((position-left)/(W-left-right)*(values.length-1))));
+    return Math.max(0, Math.min(values.length-1, Math.round((position-left)/(W-left-right)*(values.length-1))));
+  };
+  let dragStart = null;
+  if (selectable) {
+    svg.classList.add("selectable");
+    svg.addEventListener("pointerdown", event => {
+      if (event.button !== 0) return;
+      dragStart = indexAt(event); svg.setPointerCapture(event.pointerId);
+      setSelection({a:dragStart, b:dragStart});
+    });
+    svg.addEventListener("pointerup", event => {
+      if (dragStart === null) return;
+      const index = indexAt(event);
+      // Een klik zonder slepen wist de selectie.
+      setSelection(index === dragStart ? null : {a:Math.min(dragStart,index), b:Math.max(dragStart,index)});
+      dragStart = null;
+    });
+    svg.addEventListener("pointercancel", () => {dragStart = null; setSelection(null);});
+  }
+  svg.addEventListener("pointermove", event => {
+    const index = indexAt(event);
+    if (dragStart !== null) setSelection({a:Math.min(dragStart,index), b:Math.max(dragStart,index)});
     cursor.setAttribute("x1",x(index)); cursor.setAttribute("x2",x(index)); cursor.setAttribute("visibility","visible");
     const value=values[index]; marker.setAttribute("visibility",value===null?"hidden":"visible");
     if(value!==null){marker.setAttribute("cx",x(index));marker.setAttribute("cy",y(value));}
@@ -129,6 +157,37 @@ function chart(container, values, stamps, unit, emptyMessage, colour = "#32876c"
   });
   svg.addEventListener("pointerleave",() => {cursor.setAttribute("visibility","hidden");marker.setAttribute("visibility","hidden");label.textContent="";});
   container.append(svg);
+}
+function ratedMW(id) {
+  if (id === "combined") return ratedMW("fryslan") + ratedMW("beabuorren");
+  const p = current.parks[id]; return p.count * p.rated_kw / 1000;
+}
+function seriesFor(id) {return id === "combined" ? current.combined_mw : current.parks[id].power_mw;}
+function setSelection(range) {
+  selection = range;
+  bands.forEach(({band, x}) => {
+    band.setAttribute("visibility", range ? "visible" : "hidden");
+    if (range) {band.setAttribute("x", x(range.a)); band.setAttribute("width", Math.max(1, x(range.b) - x(range.a)));}
+  });
+  if (!current) return;
+  [...ids, "combined"].forEach(id => {
+    const box = $(id).querySelector(".range"), text = box.querySelector("span"), clear = box.querySelector("button");
+    clear.hidden = !range;
+    if (!range) {text.textContent = "Sleep in de grafiek om een tijdvak te selecteren."; return;}
+    const values = seriesFor(id).slice(range.a, range.b + 1);
+    // Eindtijd in Nederlandse tijd: begin van de minuut na de selectie, of middernacht.
+    const end = current.timestamps[range.b + 1]?.slice(11,16) ?? "24:00";
+    const label = `${current.timestamps[range.a].slice(11,16)}–${end} (${format(values.length/60,2)} u)`;
+    if (values.includes(null)) {text.textContent = `Selectie ${label}: opbrengst onbekend door ontbrekende data.`; return;}
+    const energy = values.reduce((sum, v) => sum + v, 0) / 60;
+    text.textContent = `Selectie ${label}: ${format(energy)} MWh · ${format(energy/ratedMW(id),2)} vollasturen · gemiddeld ${format(energy/(values.length/60))} MW`;
+  });
+}
+function showEnergy(element, energy, id) {
+  element.replaceChildren(document.createTextNode(energy===null?"—":`${format(energy)} MWh`));
+  const small=document.createElement("small");
+  small.textContent=energy===null?"GESCHATTE DAGOPBRENGST":`${format(energy/ratedMW(id),1)} VOLLASTUREN · GESCHATTE DAGOPBRENGST`;
+  element.append(small);
 }
 function controls() {
   $("previous").disabled = busy || $("date").value <= "2025-01-01";
@@ -178,13 +237,11 @@ async function load() {
   try {
     const data = await request("/api/profile?"+parameters());
     if (call !== sequence) return;
-    current = data;
+    current = data; bands = []; selection = null;
     ids.forEach(id => {
       const p = data.parks[id], card=$(id);
-      const energy = card.querySelector(".energy"); energy.replaceChildren();
-      energy.append(document.createTextNode(p.energy_mwh===null?"—":`${format(p.energy_mwh)} MWh`));
-      const small=document.createElement("small");small.textContent="GESCHATTE DAGOPBRENGST";energy.append(small);
-      chart(card.querySelector(".plot"), p.power_mw, data.timestamps, "MW", p.curve?"Vermogen niet beschikbaar: geen bruikbare windmetingen.":"Vermogen nog niet beschikbaar: voeg een curve voor de juiste turbine-uitvoering toe.", "#32876c", p.reference_points.map(point=>({timestamp:point.timestamp,value:point.power_mw})));
+      showEnergy(card.querySelector(".energy"), p.energy_mwh, id);
+      chart(card.querySelector(".plot"), p.power_mw, data.timestamps, "MW", p.curve?"Vermogen niet beschikbaar: geen bruikbare windmetingen.":"Vermogen nog niet beschikbaar: voeg een curve voor de juiste turbine-uitvoering toe.", "#32876c", p.reference_points.map(point=>({timestamp:point.timestamp,value:point.power_mw})), true);
       chart(card.querySelector(".windplot"), p.wind_ms, data.timestamps, "m/s op 10 m", "Geen bruikbare windmetingen.","#749caf", p.reference_points.map(point=>({timestamp:point.timestamp,value:point.wind_ms})));
       card.querySelector(".source").textContent=`KNMI ${p.station.properties.name} · ${p.missing_wind_minutes} ontbrekende windminuten`;
       // Opgeslagen voorbeeldprofielen liggen vast; het vinkje toont hun instelling.
@@ -193,13 +250,14 @@ async function load() {
       const source=card.querySelector(".curve-source");source.replaceChildren();
       if(p.curve){source.append(document.createTextNode(p.curve.status+" "));const link=document.createElement("a");link.href=p.curve.source;link.textContent=p.curve.kind==="cubic_scenario"?"Natuurkundige achtergrond ↗":"Curvebron ↗";link.target="_blank";link.rel="noopener";source.append(link);} else source.textContent="Vermogenscurve ontbreekt; windmetingen zijn wel beschikbaar.";
     });
-    const combined=$("combined");combined.querySelector(".energy").textContent=data.combined_energy_mwh===null?"—":`${format(data.combined_energy_mwh)} MWh`;
-    chart(combined.querySelector(".plot"),data.combined_mw,data.timestamps,"MW","Gecombineerd vermogen vereist een beschikbare curve én winddata voor beide parken.","#32876c",data.combined_reference_points.map(point=>({timestamp:point.timestamp,value:point.power_mw})));
+    const combined=$("combined");showEnergy(combined.querySelector(".energy"),data.combined_energy_mwh,"combined");
+    chart(combined.querySelector(".plot"),data.combined_mw,data.timestamps,"MW","Gecombineerd vermogen vereist een beschikbare curve én winddata voor beide parken.","#32876c",data.combined_reference_points.map(point=>({timestamp:point.timestamp,value:point.power_mw})), true);
+    setSelection(null);
     $("method").textContent=data.method;
     const missing=ids.filter(id=>!data.parks[id].curve);
     $("status").textContent=`${data.date} · ${format(data.minutes,0)} minuten · Europe/Amsterdam. ${missing.length?"Wind opgehaald; vermogen nog onvolledig door ontbrekende curve.":"Profielen berekend."}${window.WINDPROFIEL_PREVIEW?" Opgeslagen KNMI-voorbeeld; geen live aanvraag.":""}`;
   } catch(error) {
-    if(call===sequence){$("status").textContent=error.message;$("charts").querySelectorAll(".plot,.windplot").forEach(el=>el.replaceChildren());$("charts").querySelectorAll(".energy").forEach(el=>el.textContent="—");}
+    if(call===sequence){$("status").textContent=error.message;$("charts").querySelectorAll(".range span").forEach(el=>el.textContent="");$("charts").querySelectorAll(".range button").forEach(el=>el.hidden=true);$("charts").querySelectorAll(".plot,.windplot").forEach(el=>el.replaceChildren());$("charts").querySelectorAll(".energy").forEach(el=>el.textContent="—");}
   } finally {if(call===sequence){busy=false;controls();}}
 }
 function moveDay(delta){const d=new Date($("date").value+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+delta);$("date").value=d.toISOString().slice(0,10);load();}
@@ -250,6 +308,7 @@ async function init(){
 }
 controls();init();
 $("wake").addEventListener("change",load);
+$("charts").querySelectorAll(".range button").forEach(button=>button.addEventListener("click",()=>setSelection(null)));
 $("show-points").addEventListener("change",event=>$("charts").classList.toggle("hide-points",!event.target.checked));
 </script>
 </body>

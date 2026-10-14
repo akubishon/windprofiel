@@ -72,7 +72,10 @@ Formaatvalidatie bewijst niet dat de curve gecertificeerd is. Uploads staan onde
 `.env` zijn uitgesloten van Git.
 
 De app heeft datumkeuze, vorige/volgende dag, stationkeuze, hoverwaarden,
-CSV-download en broninformatie. CSV-velden voor ontbrekend vermogen blijven leeg.
+CSV-download en broninformatie. Per park staan de vollasturen van de dag naast
+de dagopbrengst. Sleep in een vermogensgrafiek om een tijdvak te selecteren: alle
+drie de kaarten tonen dan opbrengst, vollasturen en gemiddeld vermogen van dat
+tijdvak. Klik zonder slepen of gebruik **Wis selectie** om terug te gaan. CSV-velden voor ontbrekend vermogen blijven leeg.
 Bekijk [bronnen, rekenwijze en validatie](docs/databronnen.md) voor alle aannames.
 
 ## Controle
