@@ -179,6 +179,20 @@ kuststation Stavoren.
 als op 18 december en elk model geeft vrijwel vol vermogen (~9,1 GWh). Het
 verschil past bij afregeling of stilstand, die dit model niet kent.
 
+Drie zomerdagen passen niet bij dit model, ook niet met `α = 0`:
+
+| Dag | Productie | Model | Model met 9–18 uur stil |
+| --- | --- | --- | --- |
+| 7 juli 2025 | 1,3 GWh | 7,0 GWh | 3,6 GWh |
+| 20 juli 2025 | 0,76 GWh | 1,9 GWh | 0,85 GWh |
+| 22 juli 2025 | 3,2 GWh | 6,6 GWh | 3,4 GWh |
+
+Het waaide op Houtribdijk overdag stevig, terwijl de productie laag bleef. Als
+het park van 9 tot 18 uur stilstaat, kloppen 20 en 22 juli vrijwel. Dat past bij
+afregeling rond de zonnepiek, maar is **niet bevestigd**; 7 juli blijft ook dan
+te hoog. Deze dagen zijn daarom niet gebruikt voor de ijking. Het model geeft de
+productie die met de wind mogelijk is, niet wat het park werkelijk levert.
+
 **Vier dagen is een kleine steekproef**, alle in de winter. Op stabiele
 winterdagen is de exponent hoger dan in een onstabiele zomer, dus in de zomer
 kan het model overschatten. Meer productiedagen uit andere seizoenen zijn nodig
