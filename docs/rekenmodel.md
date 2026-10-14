@@ -206,6 +206,15 @@ Ook de nachturen van 20 juli liggen hoger dan het model. Een aparte nachtexponen
 (circa +0,12) verbetert die uren, maar maakt de decemberdagen 20 tot 60 % te hoog;
 met de huidige data is dat niet verantwoord en daarom niet ingebouwd.
 
+Voor 4 december 2025 klopt het dagtotaal (4,4 tegen ~4,5 GWh), maar per uur is
+het model te steil: bij weinig wind te laag, rond 16–18 uur op vol vermogen
+(~380 MW) waar het park ~300 MW leverde. Getest is een parkcurve die per moment
+middelt over ±25 % windspreiding tussen turbines. Die volgt het uurverloop in
+december beter en geeft 28 december goed (0,77 GWh), maar maakt 20 en 22 juli
+50–60 % te hoog. Over alle uren en dagen samen daalt de gemiddelde afwijking
+alleen van circa 64 naar 52 MWh per uur. Dat weegt met deze data niet op tegen
+het extra model; de spreiding is daarom niet ingebouwd.
+
 **Dit is een kleine steekproef**: vier winter- en twee zomerdagen. Voorjaar en
 herfst zijn niet gecontroleerd; daar is de cosinus een interpolatie. De
 seizoensformule is empirisch en beschrijft niet het weer van de dag: een
