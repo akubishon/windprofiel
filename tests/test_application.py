@@ -3,7 +3,7 @@ import unittest
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
-from windprofiel.application import PARKS, build_profile, csv_rows, day_energy, nl_number, nl_time, shear_exponent, interpolate_minutes, parse_wind, park_power_mw, validate_curve
+from windprofiel.application import PARKS, build_profile, csv_rows, day_energy, nl_number, nl_time, parse_alpha, shear_exponent, interpolate_minutes, parse_wind, park_power_mw, validate_curve
 from windprofiel.knmi import KNMIError
 
 
@@ -78,6 +78,36 @@ class ApplicationTests(unittest.TestCase):
         index = on["parks"]["fryslan"]["wind_ms"].index(5)
         self.assertLess(on["parks"]["fryslan"]["power_mw"][index], off["parks"]["fryslan"]["power_mw"][index])
         self.assertIn("Zogverlies uitgeschakeld", off["method"])
+
+    def test_custom_alpha(self):
+        class Client:
+            def locations(self):
+                return {"features": [{"id": p["station"], "properties": {"name": k}} for k,p in PARKS.items()]}
+            def observations(self, station, day):
+                data = payload([5, 5, 5])
+                data["coverages"][0]["eumetnet:locationId"] = station
+                return data
+        with patch("windprofiel.application.load_curve", return_value=None):
+            standard = build_profile(date(2025,1,1), client=Client())
+            custom = build_profile(date(2025,1,1), client=Client(), alphas={"fryslan": 0.3, "beabuorren": None})
+        f, s = custom["parks"]["fryslan"], standard["parks"]["fryslan"]
+        self.assertEqual((f["alpha"], f["alpha_custom"]), (0.3, True))
+        self.assertAlmostEqual(f["alpha_default"], 0.18)
+        index = f["wind_ms"].index(5)
+        self.assertAlmostEqual(f["hub_wind_ms"][index], 5 * 11.5 ** 0.3)
+        self.assertGreater(f["power_mw"][index], s["power_mw"][index])
+        self.assertFalse(custom["parks"]["beabuorren"]["alpha_custom"])
+        self.assertEqual(custom["parks"]["beabuorren"]["alpha"], 0.20)
+        self.assertIn("Eigen hoogte-exponent voor Windpark Fryslân", custom["method"])
+
+    def test_parse_alpha(self):
+        self.assertIsNone(parse_alpha(None))
+        self.assertIsNone(parse_alpha("  "))
+        self.assertEqual(parse_alpha("0,25"), 0.25)
+        self.assertEqual(parse_alpha("0.1"), 0.1)
+        for bad in ("-0,1", "0,7", "abc", "nan"):
+            with self.assertRaises(ValueError):
+                parse_alpha(bad)
 
     def test_interval_midpoint_and_wind_interpolation(self):
         observations = parse_wind(payload([2, 4, 8]), "station")

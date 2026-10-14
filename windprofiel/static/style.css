@@ -388,3 +388,48 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* Eigen hoogte-exponent */
+.alpha-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+  border: 1px solid #dce5df;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 14px 12px;
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+.alpha-controls legend {
+  font-size: 12px;
+  font-weight: 650;
+  padding: 0 4px;
+}
+.alpha-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-weight: 400;
+  font-size: 13px;
+}
+.alpha-controls input {
+  width: 5em;
+  padding: 6px 8px;
+  font-variant-numeric: tabular-nums;
+}
+.alpha-controls input.custom {
+  border-color: #32876c;
+  background: #edf6f1;
+}
+.alpha-controls button {
+  padding: 6px 11px;
+  font-size: 12px;
+}
+.alpha-controls small {
+  flex-basis: 100%;
+  color: #6b807b;
+  font-size: 12px;
+}

@@ -353,10 +353,21 @@ async function request(url, options = {}) {
   }
 }
 
+// Eigen hoogte-exponent: leeg = standaard; komma of punt; null bij een ongeldige waarde.
+function alphaInput(id) {
+  const text = $("alpha-" + id).value.trim();
+  if (!text) return "";
+  const value = Number(text.replace(",", "."));
+  return Number.isFinite(value) && value >= 0 && value <= 0.6 ? String(value) : null;
+}
+
 function parameters() {
   const params = new URLSearchParams({date: $("date").value});
   ids.forEach(id => params.set(id, $("station-" + id).value));
   params.set("wake", $("wake").checked ? "1" : "0");
+  ids.forEach(id => {
+    if (alphaInput(id)) params.set("alpha_" + id, alphaInput(id));
+  });
   return params;
 }
 
@@ -383,8 +394,13 @@ function showPark(id, data) {
   const wake = data.wake
     ? `Zogverlies: wind ${format(park.wake_deficit * 100, 0)} % lager voor alle turbines (scenario-aanname).`
     : "Zogverlies uitgeschakeld.";
-  card.querySelector(".assumptions").textContent =
-    `${park.assumptions} Hoogte-exponent deze dag: α = ${format(park.alpha, 2)}. ${wake}`;
+  const alpha = park.alpha_custom
+    ? `Hoogte-exponent: α = ${format(park.alpha, 3)} (eigen waarde; standaard deze dag ${format(park.alpha_default, 3)}).`
+    : `Hoogte-exponent deze dag: α = ${format(park.alpha, 3)}.`;
+  card.querySelector(".assumptions").textContent = `${park.assumptions} ${alpha} ${wake}`;
+  // De standaardwaarde van deze dag staat grijs in het lege veld.
+  $("alpha-" + id).placeholder = format(park.alpha_default, 3);
+  $("alpha-" + id).classList.toggle("custom", Boolean(park.alpha_custom));
 
   const source = card.querySelector(".curve-source");
   source.replaceChildren();
@@ -422,6 +438,10 @@ async function load() {
   $("date-text").value = $("date").value ? nlDate($("date").value) : "";
   if (!$("date").checkValidity() || !$("date").value) {
     $("status").textContent = invalidDateMessage();
+    return;
+  }
+  if (ids.some(id => alphaInput(id) === null)) {
+    $("status").textContent = "Kies een hoogte-exponent α tussen 0 en 0,6 (bijvoorbeeld 0,15), of laat het veld leeg voor de standaard.";
     return;
   }
   const call = ++sequence;
@@ -532,6 +552,7 @@ function showPreviewDays() {
     $("curve-" + id).disabled = true;
   });
   $("wake").disabled = true;
+  ["alpha-fryslan", "alpha-beabuorren", "alpha-reset"].forEach(name => $(name).disabled = true);
   Object.keys(preview.profiles).forEach(day => {
     const button = document.createElement("button");
     button.textContent = nlDate(day);
@@ -597,6 +618,11 @@ $("calendar").addEventListener("click", () => {
 $("refresh").addEventListener("click", load);
 $("export").addEventListener("click", downloadCsv);
 $("wake").addEventListener("change", load);
+ids.forEach(id => $("alpha-" + id).addEventListener("change", load));
+$("alpha-reset").addEventListener("click", () => {
+  ids.forEach(id => $("alpha-" + id).value = "");
+  load();
+});
 $("show-points").addEventListener("change", event => $("charts").classList.toggle("hide-points", !event.target.checked));
 $("charts").querySelectorAll(".range button").forEach(button => button.addEventListener("click", () => setSelection(null)));
 ids.forEach(id => {

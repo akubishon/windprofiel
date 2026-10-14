@@ -81,6 +81,13 @@
 
     <label class="point-toggle"><input type="checkbox" id="show-points" checked> Toon tienminutenpunten · vermogen berekend uit de oorspronkelijke windgemiddelden</label>
     <label class="point-toggle"><input type="checkbox" id="wake" checked> Zogverlies meenemen · scenario: wind 5 % lager in Fryslân, 2 % in Beabuorren</label>
+    <fieldset class="alpha-controls">
+      <legend>Hoogte-exponent α in v<sub>h</sub> = v<sub>10</sub> × (h / 10)<sup>α</sup></legend>
+      <label>Fryslân <input id="alpha-fryslan" type="text" inputmode="decimal" size="5" autocomplete="off"></label>
+      <label>Beabuorren <input id="alpha-beabuorren" type="text" inputmode="decimal" size="5" autocomplete="off"></label>
+      <button id="alpha-reset" type="button">Standaard</button>
+      <small>Leeg = standaard (Fryslân per seizoen, Beabuorren 0,20); toegestaan 0 tot 0,6. Hoger α geeft meer wind op ashoogte.</small>
+    </fieldset>
     <div id="charts">
       <section class="card" id="fryslan">
         <div class="card-head">
