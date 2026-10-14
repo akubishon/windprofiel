@@ -78,13 +78,6 @@ drie de kaarten tonen dan opbrengst, vollasturen en gemiddeld vermogen van dat
 tijdvak. Klik zonder slepen of gebruik **Wis selectie** om terug te gaan. CSV-velden voor ontbrekend vermogen blijven leeg.
 Bekijk [bronnen, rekenwijze en validatie](docs/databronnen.md) voor alle aannames.
 
-HARMONIE-modelwind (KNMI Open Data, vanaf 7 januari 2026) is als alternatieve
-Fryslân-windbron getest, nog niet in de webapp:
-`python3 -m windprofiel.compare 2026-10-13 --production 2026-10-13=5.9` vergelijkt
-HARMONIE, het stationsmodel, twee combinaties (tienminutenwind van het station,
-niveau of hoogtefactor per uur uit HARMONIE) en opgegeven productie (GWh). Vereist
-`KNMI_OPEN_DATA_API_KEY`; zie [rekenmodel, sectie 8](docs/rekenmodel.md#8-test-harmonie-als-windbron-oktober-2026).
-
 ## Controle
 
 ```sh

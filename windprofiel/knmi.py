@@ -15,7 +15,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from .profile import local_minutes
+from .profile import day_minutes
 
 COLLECTION = "10-minute-in-situ-meteorological-observations"
 BASE_URL = f"https://api.dataplatform.knmi.nl/edr/v1/collections/{COLLECTION}"
@@ -56,7 +56,7 @@ def day_query(day: date) -> dict[str, str]:
     KNMI-tijdstempels zijn het einde van het meetinterval. Ze worden hier niet
     hernoemd naar intervalbegin; die interpretatie hoort bij de modelverwerking.
     """
-    minutes = local_minutes(day)
+    minutes = day_minutes(day)
     start = minutes[0] - timedelta(minutes=10)
     end = minutes[-1] + timedelta(minutes=11)
     stamp = lambda dt: dt.isoformat().replace("+00:00", "Z")

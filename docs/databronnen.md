@@ -72,9 +72,6 @@ Sleutels worden nooit in de repository opgeslagen. Voor een andere omgeving is
 een eigen **EDR API**-sleutel nodig, aangevraagd via het
 [KNMI API Catalog](https://developer.dataplatform.knmi.nl/apis/).
 De eerdere openbare Open Data-sleutel gaf HTTP 429 en is niet in de app opgenomen.
-Voor de HARMONIE-test (`windprofiel/harmonie.py`) is een eigen Open Data API-sleutel
-`KNMI_OPEN_DATA_API_KEY` gebruikt; die gaat alleen naar de KNMI-API, niet naar de
-vooraf ondertekende S3-downloadadressen.
 
 Controleer metadata en stations met:
 
