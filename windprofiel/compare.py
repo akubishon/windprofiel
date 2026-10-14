@@ -2,17 +2,18 @@
 
     python3 -m windprofiel.compare 2026-01-08 2026-02-03 --production 2026-01-08=4.5
 
-Beide bronnen gaan door hetzelfde kubische model met 5 % zogverlies. Productie
-in GWh is optioneel en komt uit de app van Windpark Fryslân.
+Alle windreeksen (zie compare_day) gaan door hetzelfde kubische model met 5 %
+zogverlies. Productie in GWh is optioneel en komt uit de app van Windpark Fryslân.
 """
 
 import argparse
 import json
+from math import log
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from .application import PARKS, interpolate_minutes, park_power_mw, parse_wind, shear_exponent
-from .harmonie import HarmonieClient, hub_speed, local_day_hours
+from .harmonie import HarmonieClient, hub_speed, local_day_hours, shear_factor
 from .knmi import KNMIClient, KNMIError, load_env_file
 from .profile import local_minutes
 
@@ -20,10 +21,9 @@ ROOT = Path(__file__).resolve().parent.parent
 FRYSLAN = PARKS["fryslan"]
 
 
-def harmonie_minutes(samples: list[dict | None], moments) -> list[float | None]:
-    """Uurwaarden (momentopnames) lineair naar minuten; geen overbrugging van gaten."""
-    points = [(datetime.fromisoformat(s["valid"]), hub_speed(s["speed_ms"]))
-              for s in samples if s is not None]
+def hourly_minutes(points: list[tuple[datetime, float | None]], moments) -> list[float | None]:
+    """Uurwaarden lineair naar minuten; geen overbrugging van gaten."""
+    points = [p for p in points if p[1] is not None]
     result = []
     for moment in moments:
         before = [p for p in points if p[0] <= moment]
@@ -36,7 +36,23 @@ def harmonie_minutes(samples: list[dict | None], moments) -> list[float | None]:
     return result
 
 
-def energy(hub: list[float | None], moments) -> tuple[float | None, list[float | None]]:
+def harmonie_minutes(samples: list[dict | None], moments, value=hub_speed) -> list[float | None]:
+    """HARMONIE-momentopnames per uur, omgezet met `value`, lineair naar minuten."""
+    return hourly_minutes([(datetime.fromisoformat(s["valid"]), value(s["speed_ms"]))
+                           for s in samples if s is not None], moments)
+
+
+def station_mean(observations: list[tuple[datetime, float | None]], moment: datetime) -> float | None:
+    """Gemiddelde stationswind binnen een half uur rond een HARMONIE-uur.
+
+    Aan de daggrenzen zijn alleen de waarden binnen de opgevraagde dag beschikbaar;
+    minstens drie tienminutengemiddelden zijn vereist.
+    """
+    values = [v for t, v in observations if abs((t - moment).total_seconds()) <= 1800 and v is not None]
+    return None if len(values) < 3 or sum(values) <= 0 else sum(values) / len(values)
+
+
+def energy(hub: list[float | None]) -> tuple[float | None, list[float | None]]:
     power = [park_power_mw(v, "fryslan", None, wake=True) for v in hub]
     hourly = []
     for h in range(0, len(power), 60):
@@ -46,23 +62,40 @@ def energy(hub: list[float | None], moments) -> tuple[float | None, list[float |
 
 
 def compare_day(day: date, harmonie: HarmonieClient, knmi: KNMIClient, lead: int = 1) -> dict:
+    """Vier windreeksen op 115 m voor één dag, alle door hetzelfde vermogensmodel.
+
+    station:  stationswind × seizoens-α (huidig model)
+    harmonie: HARMONIE per uur, lineair naar minuten
+    shear:    stationswind × HARMONIE-verhouding v115/v10 boven het park
+    level:    stationswind × v115(HARMONIE) / uurgemiddelde stationswind
+    """
     moments = local_minutes(day)
     start, hours = local_day_hours(day)
     samples = harmonie.hourly_series(start, hours + 1, lead=lead)
-    h_hub = harmonie_minutes(samples, moments)
     station = FRYSLAN["station"]
-    s_wind = interpolate_minutes(parse_wind(knmi.observations(station, day), station), moments)
+    observations = parse_wind(knmi.observations(station, day), station)
+    s_wind = interpolate_minutes(observations, moments)
     alpha = shear_exponent(FRYSLAN, day)
-    s_hub = [None if v is None else v * (FRYSLAN["hub_height"] / 10) ** alpha for v in s_wind]
-    h_energy, h_hourly = energy(h_hub, moments)
-    s_energy, s_hourly = energy(s_hub, moments)
+    times = [(datetime.fromisoformat(s["valid"]), s["speed_ms"]) for s in samples if s is not None]
+    level = []
+    for moment, speeds in times:
+        mean_wind = station_mean(observations, moment)
+        level.append((moment, None if mean_wind is None else hub_speed(speeds) / mean_wind))
+    scale = lambda factors: [None if v is None or f is None else v * f for v, f in zip(s_wind, factors)]
+    series = {
+        "station": [None if v is None else v * (FRYSLAN["hub_height"] / 10) ** alpha for v in s_wind],
+        "harmonie": harmonie_minutes(samples, moments),
+        "shear": scale(harmonie_minutes(samples, moments, shear_factor)),
+        "level": scale(hourly_minutes(level, moments)),
+    }
     mean = lambda xs: None if None in xs else sum(xs) / len(xs)
-    return {"date": day.isoformat(), "alpha_station": round(alpha, 3),
-            "harmonie_hub_ms": mean(h_hub), "station_hub_ms": mean(s_hub),
-            "harmonie_gwh": None if h_energy is None else h_energy / 1000,
-            "station_gwh": None if s_energy is None else s_energy / 1000,
-            "harmonie_hourly_mwh": h_hourly, "station_hourly_mwh": s_hourly,
-            "missing_harmonie_hours": samples.count(None)}
+    result = {"date": day.isoformat(), "alpha_station": round(alpha, 3),
+              "alpha_harmonie": [round(log(shear_factor(s)) / log(FRYSLAN["hub_height"] / 10), 3) for _, s in times],
+              "missing_harmonie_hours": samples.count(None)}
+    for name, hub in series.items():
+        total, hourly = energy(hub)
+        result[name] = {"gwh": None if total is None else total / 1000, "hub_ms": mean(hub), "hourly_mwh": hourly}
+    return result
 
 
 def main() -> int:
@@ -82,13 +115,19 @@ def main() -> int:
         print(str(exc))
         return 1
     fmt = lambda x, n=2: "—" if x is None else f"{x:.{n}f}"
-    print("datum       productie  HARMONIE  station   v115 H/S (m/s)")
+    names = ("station", "harmonie", "shear", "level")
+    print("datum       productie" + "".join(f"{n:>10}" for n in names) + "   (GWh)")
+    errors = {n: [] for n in names}
     for r in results:
         p = production.get(date.fromisoformat(r["date"]))
-        print(f"{r['date']}  {fmt(p):>8}  {fmt(r['harmonie_gwh']):>8}  {fmt(r['station_gwh']):>7}"
-              f"   {fmt(r['harmonie_hub_ms'], 1)} / {fmt(r['station_hub_ms'], 1)}")
+        print(f"{r['date']}  {fmt(p):>8}" + "".join(f"{fmt(r[n]['gwh']):>10}" for n in names))
         if p is not None:
             r["production_gwh"] = p
+            for n in names:
+                if r[n]["gwh"] is not None:
+                    errors[n].append(abs(r[n]["gwh"] - p))
+    if any(errors.values()):
+        print("gem. |fout|          " + "".join(f"{fmt(sum(e) / len(e) if e else None):>10}" for e in errors.values()))
     if args.json:
         args.json.write_text(json.dumps(results, indent=1))
     return 0

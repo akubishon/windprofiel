@@ -3,9 +3,9 @@ import tarfile
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from windprofiel.compare import harmonie_minutes
+from windprofiel.compare import harmonie_minutes, hourly_minutes, station_mean
 from windprofiel.harmonie import (GribError, HarmonieClient, extract_wind, hub_speed, local_day_hours,
-                                  member_name)
+                                  member_name, shear_factor)
 
 
 def ibm(value: float) -> bytes:
@@ -57,7 +57,7 @@ def wind_file(lead: int = 1) -> bytes:
     # Velden op 50 m en met bitmap moeten genegeerd worden.
     data += message(33, 50, [200] * 6, lead=lead)
     data += message(33, 100, [99] * 6, bitmap=True, lead=lead)
-    for level, u, v in ((100, 4, 6), (200, 6, 8)):
+    for level, u, v in ((10, 3, 4), (100, 4, 6), (200, 6, 8)):
         # u = 1 + x/2: x = 2u − 2 op de zuidelijke rij, noordelijke rij afwijkend.
         data += message(33, level, [2 * u - 2] * 3 + [0] * 3, lead=lead)
         data += message(34, level, [2 * v - 2] * 3 + [0] * 3, lead=lead)
@@ -71,6 +71,7 @@ class GribTests(unittest.TestCase):
         self.assertEqual(result["valid"], "2026-01-08T01:00:00+00:00")
         self.assertAlmostEqual(result["speed_ms"][100], 7.2111, places=3)  # √(4²+6²)
         self.assertAlmostEqual(result["speed_ms"][200], 10.0)
+        self.assertAlmostEqual(result["speed_ms"][10], 5.0)
 
     def test_hub_interpolation_accepts_json_keys(self):
         self.assertAlmostEqual(hub_speed({"100": 8.0, "200": 10.0}), 8.3)
@@ -121,6 +122,15 @@ class SeriesTests(unittest.TestCase):
                    for h, s in ((0, 6.0), (1, 9.0))] + [None]
         moments = [t0 + timedelta(minutes=m) for m in (0, 20, 60, 61)]
         self.assertEqual(harmonie_minutes(samples, moments), [6.0, 7.0, 9.0, None])
+        self.assertEqual(hourly_minutes([(t0, 1.0), (t0 + timedelta(hours=1), None)], moments[:2]), [1.0, None])
+
+    def test_shear_factor_and_station_hour_mean(self):
+        self.assertAlmostEqual(shear_factor({"10": 5.0, "100": 8.0, "200": 10.0}), 8.3 / 5)
+        t0 = datetime(2026, 1, 8, 12, tzinfo=timezone.utc)
+        observations = [(t0 + timedelta(minutes=m), v) for m, v in
+                        ((-35, 50.0), (-25, 4.0), (-15, None), (-5, 6.0), (5, 8.0), (35, 50.0))]
+        self.assertAlmostEqual(station_mean(observations, t0), 6.0)
+        self.assertIsNone(station_mean(observations[:3], t0))
 
 
 if __name__ == "__main__":

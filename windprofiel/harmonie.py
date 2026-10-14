@@ -2,7 +2,7 @@
 
 Dataset `harmonie_arome_cy43_p1`: elke uurlijkse run is een tar met per
 voorspellingsuur een GRIB1-bestand. Met HTTP-range-verzoeken wordt alleen het
-benodigde GRIB-bestand gelezen; daarvan worden u en v op 100 en 200 m gedecodeerd
+benodigde GRIB-bestand gelezen; daarvan worden u en v op 10, 100 en 200 m gedecodeerd
 voor de roosterpunten in het parkgebied. Alleen die kleine uitsnede wordt gecachet.
 """
 
@@ -25,7 +25,7 @@ FIRST_RUN = datetime(2026, 1, 7, tzinfo=timezone.utc)
 # Parkgebied Windpark Fryslân rond 53,03 N 5,27 E (circa 9 x 8 km), aanname.
 PARK_BOX = {"lat": (52.995, 53.065), "lon": (5.20, 5.34)}
 HUB_HEIGHT = 115
-LEVELS = (100, 200)
+LEVELS = (10, 100, 200)
 U, V, HEIGHT_LEVEL = 33, 34, 105
 
 
@@ -161,6 +161,11 @@ def hub_speed(speeds: dict, height: float = HUB_HEIGHT) -> float:
     return low + (high - low) * (height - 100) / 100
 
 
+def shear_factor(speeds: dict, height: float = HUB_HEIGHT) -> float:
+    """Verhouding wind op ashoogte / wind op 10 m in HARMONIE boven het park."""
+    return hub_speed(speeds, height) / {int(k): v for k, v in speeds.items()}[10]
+
+
 def member_name(run: datetime, lead: int) -> str:
     return f"HA43_N20_{run:%Y%m%d%H}00_{lead:03d}00_GB"
 
@@ -237,7 +242,9 @@ class HarmonieClient:
         if self.cache_dir is not None:
             cache = self.cache_dir / f"{run:%Y%m%d%H}_{lead:02d}.json"
             if cache.exists():
-                return json.loads(cache.read_text())
+                cached = json.loads(cache.read_text())
+                if all(str(level) in cached["speed_ms"] for level in LEVELS):
+                    return cached
         result = extract_wind(self.read_member(run, lead))
         result.update(run=run.isoformat(), lead=lead)
         if result["valid"] != (run + timedelta(hours=lead)).isoformat():
