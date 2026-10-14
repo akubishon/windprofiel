@@ -7,39 +7,107 @@
 </head>
 <body>
   <main>
-    <header><div class="eyebrow">WINDENERGIE · FRYSLÂN</div><h1>Een dag in de wind.</h1>
-      <p>Bekijk het geschatte vermogen van twee windparken, op basis van historische KNMI-metingen.</p></header>
+    <header>
+      <div class="eyebrow">WINDENERGIE · FRYSLÂN</div>
+      <h1>Een dag in de wind.</h1>
+      <p>Bekijk het geschatte vermogen van twee windparken, op basis van KNMI-metingen.</p>
+    </header>
+
     <section class="toolbar" aria-label="Datum kiezen">
-      <div><label for="date-text">Geselecteerde dag</label><div class="date-controls">
-        <button id="previous" aria-label="Vorige dag">←</button>
-        <input id="date-text" type="text" inputmode="numeric" placeholder="dd-mm-jjjj" size="10" autocomplete="off">
-        <button id="calendar" type="button" aria-label="Kalender openen">📅</button>
-        <input id="date" class="picker" type="date" min="2025-01-01" value="2025-01-15" tabindex="-1" aria-hidden="true">
-        <button id="next" aria-label="Volgende dag">→</button></div></div>
-      <button id="refresh">Profiel ophalen</button><button id="export" disabled>Download CSV</button>
+      <div>
+        <label for="date-text">Geselecteerde dag</label>
+        <div class="date-controls">
+          <button id="previous" aria-label="Vorige dag">←</button>
+          <input id="date-text" type="text" inputmode="numeric" placeholder="dd-mm-jjjj" size="10" autocomplete="off">
+          <button id="calendar" type="button" aria-label="Kalender openen">📅</button>
+          <!-- Verborgen ISO-datumveld: interne waarde en kalender van de browser. -->
+          <input id="date" class="picker" type="date" min="2025-01-01" value="2025-01-15" tabindex="-1" aria-hidden="true">
+          <button id="next" aria-label="Volgende dag">→</button>
+        </div>
+      </div>
+      <button id="refresh">Profiel ophalen</button>
+      <button id="export" disabled>Download CSV</button>
     </section>
+
     <p id="status" role="status" aria-live="polite">App starten… Geen verandering? Start de Python-webserver zoals beschreven in de README.</p>
     <noscript>Schakel JavaScript in om de KNMI-data en grafieken te laden.</noscript>
     <aside class="notice">Minuutwaarden zijn schattingen uit tienminutengemiddelden. Dit is geen gemeten elektriciteitsproductie.</aside>
-    <aside class="notice" id="preview-notice" hidden>Zelfstandige voorbeeldpagina met opgeslagen echte KNMI-data. Deze pagina bevat de onderstaande dagen en gebruikt de standaardstations. Voor andere dagen, stations of curve-upload start je de Python-webserver volgens de README.<div id="preview-days"></div></aside>
+    <aside class="notice" id="preview-notice" hidden>
+      Zelfstandige voorbeeldpagina met opgeslagen echte KNMI-data. Deze pagina bevat de onderstaande dagen en gebruikt
+      de standaardstations. Voor andere dagen, stations of curve-upload start je de Python-webserver volgens de README.
+      <div id="preview-days"></div>
+    </aside>
+
     <label class="point-toggle"><input type="checkbox" id="show-points" checked> Toon tienminutenpunten · vermogen berekend uit de oorspronkelijke windgemiddelden</label>
     <label class="point-toggle"><input type="checkbox" id="wake" checked> Zogverlies meenemen · scenario: wind 5 % lager in Fryslân, 2 % in Beabuorren</label>
     <div id="charts">
-      <section class="card" id="fryslan"><div class="card-head"><div><span class="eyebrow">89 TURBINES · 382,7 MW</span><h2>Windpark Fryslân</h2></div><div class="energy">—</div></div><div class="plot"></div><div class="range"><span></span><button type="button" hidden>Wis selectie</button></div><div class="source"></div><details><summary>Wind en modelaannames</summary><div class="windplot"></div><p class="assumptions"></p><p class="curve-source"></p></details></section>
-      <section class="card" id="beabuorren"><div class="card-head"><div><span class="eyebrow">8 TURBINES · 10,4 MW</span><h2>Wynpark Beabuorren</h2></div><div class="energy">—</div></div><div class="plot"></div><div class="range"><span></span><button type="button" hidden>Wis selectie</button></div><div class="source"></div><details><summary>Wind en modelaannames</summary><div class="windplot"></div><p class="assumptions"></p><p class="curve-source"></p></details></section>
-      <section class="card" id="combined"><div class="card-head"><div><span class="eyebrow">BEIDE PARKEN · 393,1 MW</span><h2>Gecombineerd vermogen</h2></div><div class="energy">—</div></div><div class="plot"></div><div class="range"><span></span><button type="button" hidden>Wis selectie</button></div><p class="source">De som van beide parken op hetzelfde tijdstip.</p></section>
+      <section class="card" id="fryslan">
+        <div class="card-head">
+          <div><span class="eyebrow">89 TURBINES · 382,7 MW</span><h2>Windpark Fryslân</h2></div>
+          <div class="energy">—</div>
+        </div>
+        <div class="plot"></div>
+        <div class="range"><span></span><button type="button" hidden>Wis selectie</button></div>
+        <div class="source"></div>
+        <details>
+          <summary>Wind en modelaannames</summary>
+          <div class="windplot"></div>
+          <p class="assumptions"></p>
+          <p class="curve-source"></p>
+        </details>
+      </section>
+      <section class="card" id="beabuorren">
+        <div class="card-head">
+          <div><span class="eyebrow">8 TURBINES · 10,4 MW</span><h2>Wynpark Beabuorren</h2></div>
+          <div class="energy">—</div>
+        </div>
+        <div class="plot"></div>
+        <div class="range"><span></span><button type="button" hidden>Wis selectie</button></div>
+        <div class="source"></div>
+        <details>
+          <summary>Wind en modelaannames</summary>
+          <div class="windplot"></div>
+          <p class="assumptions"></p>
+          <p class="curve-source"></p>
+        </details>
+      </section>
+      <section class="card" id="combined">
+        <div class="card-head">
+          <div><span class="eyebrow">BEIDE PARKEN · 393,1 MW</span><h2>Gecombineerd vermogen</h2></div>
+          <div class="energy">—</div>
+        </div>
+        <div class="plot"></div>
+        <div class="range"><span></span><button type="button" hidden>Wis selectie</button></div>
+        <p class="source">De som van beide parken op hetzelfde tijdstip.</p>
+      </section>
     </div>
-    <details class="settings"><summary>Meetstations en vermogenscurves</summary>
+
+    <details class="settings">
+      <summary>Meetstations en vermogenscurves</summary>
       <p>Meetstations liggen buiten de parken. De standaardkeuze gebruikt Houtribdijk voor het IJsselmeer (geijkt op productiedagen) en Stavoren, het dichtstbijzijnde station, voor Beabuorren. Je kunt per park een ander station kiezen.</p>
-      <div class="settings-grid"><div><label for="station-fryslan">KNMI-station voor Fryslân</label><select id="station-fryslan"></select><label for="curve-fryslan">Curve voor Siemens Gamesa SWT-DD-130 (4,3 MW)</label><input type="file" id="curve-fryslan" accept=".json,application/json"></div>
-      <div><label for="station-beabuorren">KNMI-station voor Beabuorren</label><select id="station-beabuorren"></select><label for="curve-beabuorren">Curve voor Siemens SWT-1.3-62 (1,3 MW)</label><input type="file" id="curve-beabuorren" accept=".json,application/json"></div></div>
+      <div class="settings-grid">
+        <div>
+          <label for="station-fryslan">KNMI-station voor Fryslân</label>
+          <select id="station-fryslan"></select>
+          <label for="curve-fryslan">Curve voor Siemens Gamesa SWT-DD-130 (4,3 MW)</label>
+          <input type="file" id="curve-fryslan" accept=".json,application/json">
+        </div>
+        <div>
+          <label for="station-beabuorren">KNMI-station voor Beabuorren</label>
+          <select id="station-beabuorren"></select>
+          <label for="curve-beabuorren">Curve voor Siemens SWT-1.3-62 (1,3 MW)</label>
+          <input type="file" id="curve-beabuorren" accept=".json,application/json">
+        </div>
+      </div>
       <p>Fryslân gebruikt standaard het benaderde kubische model hieronder. Een aangeleverde curve vervangt dat model. Beabuorren gebruikt een secundaire gepubliceerde curve. Beide geven indicatieve schattingen.</p>
       <p>Een JSON-curve bevat <code>model</code>, <code>source</code> (HTTPS-bron), <code>cut_out</code> (m/s), <code>points</code> (paren van m/s en kW) en eventueel <code>status</code>. De punten beginnen bij nul vermogen en eindigen vóór cut-out. Een geüploade curve wordt lokaal bewaard; controle van het formaat is geen certificering van de bron.</p>
     </details>
-    <details class="settings" id="formulas"><summary>Formules, werking en bronnen</summary>
+
+    <details class="settings" id="formulas">
+      <summary>Formules, werking en bronnen</summary>
       <h3>1. Van KNMI-wind naar wind op ashoogte</h3>
       <div class="formula">v<sub>h</sub> = v<sub>10</sub> × (h / 10)<sup>α</sup></div>
-      <p>v<sub>10</sub> is de KNMI-windsnelheid op 10 meter in m/s; h is de ashoogte in meters. α beschrijft hoe snel de wind met de hoogte toeneemt. Fryslân gebruikt h = 115 m en een seizoensexponent α = 0,115 + 0,065 × cos(2π(n − 1)/365), met n het dagnummer: 0,18 in de winter, 0,05 in de zomer. Beabuorren gebruikt h = 60 m en α = 0,20. De Fryslân-exponent is geijkt op zes dagopbrengsten uit 2025; geen van beide is een lokale meting. Deze omzetting beïnvloedt de omvang van de vermogensschommelingen.</p>
+      <p>v<sub>10</sub> is de KNMI-windsnelheid op 10 meter in m/s; h is de ashoogte in meters. α beschrijft hoe snel de wind met de hoogte toeneemt. Fryslân gebruikt h = 115 m en een seizoensexponent α = 0,115 + 0,065 × cos(2π(n − 1)/365), met n het dagnummer: 0,18 in de winter, 0,05 in de zomer. Beabuorren gebruikt h = 60 m en α = 0,20. De Fryslân-exponent is geijkt op tien productiedagen uit 2025 en 2026; geen van beide is een lokale meting. Deze omzetting beïnvloedt de omvang van de vermogensschommelingen.</p>
       <p><a href="https://en.wikipedia.org/wiki/Wind_profile_power_law" target="_blank" rel="noopener">Achtergrond: wind profile power law</a> beschrijft de formule en de afhankelijkheid van terrein en atmosferische stabiliteit. De bron noemt ongeveer 0,11 boven water in neutrale lucht; in stabiele winterlucht is de toename met de hoogte groter. Met 0,10 schatte het model de Fryslân-productie tot factor 2,7 te laag. 0,20 voor land is onze modelkeuze en niet specifiek voor Beabuorren vastgesteld.</p>
       <h3>2. Fryslân: benaderd vermogen per turbine</h3>
       <p>Hier is v de geschatte wind op ashoogte, niet de ruwe KNMI-wind op 10 meter.</p>
@@ -61,7 +129,11 @@
       <div class="formula">v(t) = v₀ + (v₁ − v₀) × (t − t₀) / (t₁ − t₀)</div>
       <p>De <a href="https://dataplatform.knmi.nl/dataset/docs/10-minute-in-situ-meteorological-observations-1-0" target="_blank" rel="noopener">KNMI-documentatie</a> beschrijft ff als tienminutengemiddelde in m/s, met tijdstempel aan het intervaleinde. Wij plaatsen het gemiddelde vijf minuten eerder, op het intervalmidden, en interpoleren de wind vóór de vermogensberekening. De stippen tonen vermogen berekend uit die oorspronkelijke gemiddelden; ze zijn geen gemeten elektriciteitsproductie. De lijn ertussen voegt geen gemeten windvlagen toe. Dit model is bruikbaar voor variatie over tientallen minuten en uren, niet voor echte schommelingen per minuut. Door de niet-lineaire curve is vermogen berekend uit gemiddelde wind ook niet hetzelfde als gemiddeld werkelijk vermogen.</p>
     </details>
-    <footer><p id="method">Bron: KNMI EDR · tienminutenwaarnemingen · tijdzone Europe/Amsterdam</p><a href="https://dataplatform.knmi.nl/dataset/10-minute-in-situ-meteorological-observations-1-0" target="_blank" rel="noopener">KNMI-dataset en kwaliteitsinformatie ↗</a></footer>
+
+    <footer>
+      <p id="method">Bron: KNMI EDR · tienminutenwaarnemingen · tijdzone Europe/Amsterdam</p>
+      <a href="https://dataplatform.knmi.nl/dataset/10-minute-in-situ-meteorological-observations-1-0" target="_blank" rel="noopener">KNMI-dataset en kwaliteitsinformatie ↗</a>
+    </footer>
   </main>
 </body>
 </html>
