@@ -27,11 +27,15 @@ De app gebruikt de officiële KNMI EDR API en de dataset
 lineair geïnterpoleerde tienminutengemiddelden, geen minuutmetingen. Meetgaten
 blijven ontbrekend. De Nederlandse kalenderdag volgt zomer- en wintertijd.
 
-Beabuorren gebruikt een gepubliceerde secundaire turbinecurve en expliciete
-hoogteaannames. Het resultaat is indicatief. De passende curve voor de 4,3 MW
-Siemens Gamesa SWT-DD-130 van Fryslân ontbreekt nog; zijn vermogensgrafiek en
-de gecombineerde grafiek blijven leeg. De winddata voor beide parken werkt wel.
-Er wordt geen curve van een andere turbine of verzonnen productie gebruikt.
+Beabuorren gebruikt een gepubliceerde secundaire turbinecurve. Fryslân gebruikt
+standaard een expliciet benaderd kubisch model: in de aanloop
+`P = 4300 * (v³ - 3³) / (11.5³ - 3³)` kW per turbine, met wind op ashoogte.
+Onder 3 m/s is het vermogen nul, van 11,5 tot en met 25 m/s 4.300 kW, boven
+25 m/s nul. De drie snelheidgrenzen zijn gekozen scenario-aannames, geen
+bevestigde turbinespecificaties. Alle drie de grafieken tonen nu geschat vermogen.
+Stippen markeren berekeningen uit oorspronkelijke tienminutengemiddelden; de
+minuutlijn ertussen is interpolatie. Zie [formules en bronnen](docs/rekenmodel.md).
+Een geüploade passende Fryslân-curve krijgt voorrang op dit model.
 
 Een curve kan via de webapp als JSON worden toegevoegd. Formaat: `model` moet
 exact de getoonde turbinenaam zijn; `source` is een HTTPS-bron-URL; `cut_out` is

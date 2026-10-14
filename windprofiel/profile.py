@@ -47,3 +47,17 @@ def combined_mw(first: list[float | None], second: list[float | None]) -> list[f
     if len(first) != len(second):
         raise ValueError("Beide parkreeksen moeten dezelfde tijdstappen hebben.")
     return [None if a is None or b is None else a + b for a, b in zip(first, second)]
+
+
+def cubic_power_kw(speed: float, *, rated_kw: float = 4300, cut_in: float = 3,
+                   rated_speed: float = 11.5, cut_out: float = 25) -> float:
+    """Indicatief scenario, geen fabrikantcurve. Plateau inclusief cut-outgrens."""
+    if not all(isfinite(v) for v in (speed, rated_kw, cut_in, rated_speed, cut_out)):
+        raise ValueError("Modelwaarden moeten eindig zijn.")
+    if speed < 0 or rated_kw <= 0 or not 0 <= cut_in < rated_speed < cut_out:
+        raise ValueError("Ongeldige windsnelheid of modelgrenzen.")
+    if speed < cut_in or speed > cut_out:
+        return 0.0
+    if speed >= rated_speed:
+        return rated_kw
+    return rated_kw * (speed**3 - cut_in**3) / (rated_speed**3 - cut_in**3)

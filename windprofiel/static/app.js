@@ -12,7 +12,7 @@ function svgElement(tag, attrs = {}, text) {
   if (text !== undefined) el.textContent = text;
   return el;
 }
-function chart(container, values, stamps, unit, emptyMessage, colour = "#32876c") {
+function chart(container, values, stamps, unit, emptyMessage, colour = "#32876c", points = []) {
   container.replaceChildren();
   const valid = values.filter(v => v !== null);
   if (!valid.length) {
@@ -40,6 +40,14 @@ function chart(container, values, stamps, unit, emptyMessage, colour = "#32876c"
     path += `${connected ? "L" : "M"}${x(i).toFixed(2)},${y(v).toFixed(2)} `; connected=true;
   });
   svg.append(svgElement("path", {d:path, fill:"none", stroke:colour, "stroke-width":2, "stroke-linejoin":"round"}));
+  const start = Date.parse(stamps[0]);
+  points.forEach(point => {
+    const index = (Date.parse(point.timestamp) - start) / 60000;
+    if(point.value === null || index < 0 || index > values.length-1) return;
+    const dot = svgElement("circle", {class:"reference-point", cx:x(index), cy:y(point.value), r:2.6, fill:"white", stroke:colour, "stroke-width":1.5});
+    dot.append(svgElement("title", {}, `${point.timestamp} · ${format(point.value,3)} ${unit} · ${unit==="MW"?"berekend uit KNMI-tienminutengemiddelde":"KNMI-tienminutengemiddelde"}`));
+    svg.append(dot);
+  });
   const cursor = svgElement("line", {y1:top, y2:H-bottom, stroke:colour, visibility:"hidden"});
   const marker = svgElement("circle", {r:4, fill:colour, visibility:"hidden"});
   const label = svgElement("text", {x:W-right, y:13, "text-anchor":"end"});
@@ -86,15 +94,15 @@ async function load() {
       const energy = card.querySelector(".energy"); energy.replaceChildren();
       energy.append(document.createTextNode(p.energy_mwh===null?"—":`${format(p.energy_mwh)} MWh`));
       const small=document.createElement("small");small.textContent="GESCHATTE DAGOPBRENGST";energy.append(small);
-      chart(card.querySelector(".plot"), p.power_mw, data.timestamps, "MW", p.curve?"Vermogen niet beschikbaar: geen bruikbare windmetingen.":"Vermogen nog niet beschikbaar: voeg een curve voor de juiste turbine-uitvoering toe.");
-      chart(card.querySelector(".windplot"), p.wind_ms, data.timestamps, "m/s op 10 m", "Geen bruikbare windmetingen.","#749caf");
+      chart(card.querySelector(".plot"), p.power_mw, data.timestamps, "MW", p.curve?"Vermogen niet beschikbaar: geen bruikbare windmetingen.":"Vermogen nog niet beschikbaar: voeg een curve voor de juiste turbine-uitvoering toe.", "#32876c", p.reference_points.map(point=>({timestamp:point.timestamp,value:point.power_mw})));
+      chart(card.querySelector(".windplot"), p.wind_ms, data.timestamps, "m/s op 10 m", "Geen bruikbare windmetingen.","#749caf", p.reference_points.map(point=>({timestamp:point.timestamp,value:point.wind_ms})));
       card.querySelector(".source").textContent=`KNMI ${p.station.properties.name} · ${p.missing_wind_minutes} ontbrekende windminuten`;
       card.querySelector(".assumptions").textContent=p.assumptions;
       const source=card.querySelector(".curve-source");source.replaceChildren();
-      if(p.curve){source.append(document.createTextNode(p.curve.status+" "));const link=document.createElement("a");link.href=p.curve.source;link.textContent="Curvebron ↗";link.target="_blank";link.rel="noopener";source.append(link);} else source.textContent="Vermogenscurve ontbreekt; windmetingen zijn wel beschikbaar.";
+      if(p.curve){source.append(document.createTextNode(p.curve.status+" "));const link=document.createElement("a");link.href=p.curve.source;link.textContent=p.curve.kind==="cubic_scenario"?"Natuurkundige achtergrond ↗":"Curvebron ↗";link.target="_blank";link.rel="noopener";source.append(link);} else source.textContent="Vermogenscurve ontbreekt; windmetingen zijn wel beschikbaar.";
     });
     const combined=$("combined");combined.querySelector(".energy").textContent=data.combined_energy_mwh===null?"—":`${format(data.combined_energy_mwh)} MWh`;
-    chart(combined.querySelector(".plot"),data.combined_mw,data.timestamps,"MW","Gecombineerd vermogen vereist een beschikbare curve én winddata voor beide parken.");
+    chart(combined.querySelector(".plot"),data.combined_mw,data.timestamps,"MW","Gecombineerd vermogen vereist een beschikbare curve én winddata voor beide parken.","#32876c",data.combined_reference_points.map(point=>({timestamp:point.timestamp,value:point.power_mw})));
     $("method").textContent=data.method;
     const missing=ids.filter(id=>!data.parks[id].curve);
     $("status").textContent=`${data.date} · ${format(data.minutes,0)} minuten · Europe/Amsterdam. ${missing.length?"Wind opgehaald; vermogen nog onvolledig door ontbrekende curve.":"Profielen berekend."}`;
@@ -135,3 +143,4 @@ async function init(){
   }catch(error){$("status").textContent=error.message;}
 }
 controls();init();
+$("show-points").addEventListener("change",event=>$("charts").classList.toggle("hide-points",!event.target.checked));

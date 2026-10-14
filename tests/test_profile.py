@@ -2,7 +2,7 @@ import unittest
 from datetime import date
 from zoneinfo import ZoneInfo
 
-from windprofiel.profile import combined_mw, day_minutes, power_kw
+from windprofiel.profile import combined_mw, cubic_power_kw, day_minutes, power_kw
 
 
 class ProfileTests(unittest.TestCase):
@@ -34,6 +34,23 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(combined_mw([1, None, 2], [3, 4, None]), [4, None, None])
         with self.assertRaises(ValueError):
             combined_mw([1], [])
+
+    def test_cubic_scenario_boundaries(self):
+        self.assertEqual(cubic_power_kw(2.999), 0)
+        self.assertEqual(cubic_power_kw(3), 0)
+        self.assertEqual(cubic_power_kw(11.5), 4300)
+        self.assertEqual(cubic_power_kw(25), 4300)
+        self.assertEqual(cubic_power_kw(25.001), 0)
+        self.assertAlmostEqual(cubic_power_kw(8), 4300 * 485 / 1493.875)
+
+    def test_cubic_ramp_is_monotonic_bounded_and_continuous(self):
+        speeds = [3 + i / 100 for i in range(851)]
+        powers = [cubic_power_kw(v) for v in speeds]
+        self.assertTrue(all(0 <= p <= 4300 for p in powers))
+        self.assertTrue(all(a <= b for a, b in zip(powers, powers[1:])))
+        self.assertAlmostEqual(cubic_power_kw(11.5 - 1e-8), 4300, places=4)
+        for invalid in [-1, float("nan"), float("inf")]:
+            with self.assertRaises(ValueError): cubic_power_kw(invalid)
 
 
 if __name__ == "__main__":

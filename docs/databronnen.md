@@ -10,11 +10,13 @@ De geregistreerde EDR-sleutel werkt via de beveiligde netwerkbinding. Historisch
 CoverageJSON-antwoorden, eenheden en stations zijn live gecontroleerd. De webapp
 heeft datumkeuze, stationkeuze, caching, interactieve grafieken en CSV-download.
 
-Fryslân mist nog een passende curve voor de 4,3 MW-uitvoering: zijn vermogen en
-de som blijven `null`, nooit nul of een vervangende turbinecurve. Beabuorren heeft
-een indicatieve vermogensschatting met een expliciet genoemde secundaire curve.
-De ashoogte voor alle turbines, de ruimtelijke representativiteit van stations,
-de hoogtecorrectie en de referentieluchtdichtheid blijven modelonzekerheden.
+Fryslân gebruikt nu het afgesproken benaderde kubische scenario. Zijn vermogen
+en de som worden berekend zodra bruikbare winddata aanwezig is. De exacte
+fabrikantcurve ontbreekt nog, maar is niet meer vereist voor dit indicatieve model.
+Beabuorren gebruikt een secundaire gepubliceerde curve. De ashoogte voor alle
+turbines, ruimtelijke representativiteit, hoogtecorrectie en referentieluchtdichtheid
+blijven modelonzekerheden. [Formules en bronnen](rekenmodel.md) onderscheiden
+gepubliceerde gegevens van onze expliciete scenario-keuzes.
 
 Data met grovere tijdstappen blijven als zodanig herkenbaar:
 interpolatie levert geen echte minuutmetingen. Lange meetgaten mogen niet stilzwijgend
@@ -144,18 +146,16 @@ Controle vanuit `/workspace/windprofiel`:
 python3 -m unittest discover -s tests -v
 ```
 
-Veertien lokale tests slagen. De unit-tests gebruiken nagebootste antwoorden
+Achttien lokale tests slagen. De unit-tests gebruiken nagebootste antwoorden
 en synthetische testcurves; die testcurves staan niet in de applicatiedata.
 Daarnaast zijn daadwerkelijke EDR-dagprofielen voor beide stations gecontroleerd:
 
-| Datum | Minuten | Ontbrekende windminuten per station | Indicatieve Beabuorren-opbrengst |
-| --- | ---: | ---: | ---: |
-| 2025-01-15 | 1.440 | 0 | 3,026 MWh |
-| 2025-03-30 | 1.380 | 0 | 232,728 MWh |
-| 2025-10-26 | 1.500 | 0 | 241,546 MWh |
+| Datum | Minuten | Ontbrekende windminuten per station | Fryslân (scenario) | Beabuorren (secundaire curve) | Samen |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 2025-01-15 | 1.440 | 0 | 135,103 MWh | 3,026 MWh | 138,129 MWh |
+| 2025-03-30 | 1.380 | 0 | 8.802,100 MWh | 232,728 MWh | 9.034,828 MWh |
+| 2025-10-26 | 1.500 | 0 | 9.391,474 MWh | 241,546 MWh | 9.633,020 MWh |
 
-Fryslân en gecombineerd vermogen blijven op deze dagen onbekend door de ontbrekende
-curve. Een browsercontrole met Chromium bevestigt datumwisseling, CSV-download,
-ontbrekende-curveberichten, nul JavaScript-fouten en geen horizontale overflow op
-een scherm van 390 pixels. De CSV voor 30 maart bevat 1.380 minuutrijen en een
-tijdstempel inclusief tijdzone-offset.
+Dit zijn modeluitkomsten, geen bevestigde parkproductie. De eerdere ontbrekende
+Fryslân-curve wordt nu vervangen door het expliciet gekozen scenario. Er is geen
+curve van een ander turbinemodel gebruikt.

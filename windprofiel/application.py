@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 from .knmi import KNMIClient, KNMIError
-from .profile import combined_mw, day_minutes, power_kw
+from .profile import combined_mw, cubic_power_kw, day_minutes, power_kw
 
 ROOT = Path(__file__).resolve().parent.parent
 PARKS = {
@@ -20,6 +20,25 @@ PARKS = {
                    "rated_kw": 1300, "hub_height": 60, "alpha": 0.20, "station": "0-20000-0-06270",
                    "assumptions": "60 m ashoogte uit historisch lokaal nieuws, nog te bevestigen voor alle turbines; exponent 0,20 is een land-aanname. Leeuwarden is een regionaal landstation, geen parkmeting."},
 }
+FRYSLAN_SCENARIO = {
+    "kind": "cubic_scenario", "model": PARKS["fryslan"]["model"],
+    "rated_kw": 4300, "cut_in": 3, "rated_speed": 11.5, "cut_out": 25,
+    "source": "https://windexchange.energy.gov/small-wind-guidebook",
+    "status": "Benaderd kubisch scenario, geen fabrikantcurve. 3 / 11,5 / 25 m/s zijn gekozen modelaannames, geen bevestigde turbinespecificaties.",
+}
+
+
+def park_power_mw(speed: float | None, park_id: str, curve: dict | None) -> float | None:
+    if speed is None:
+        return None
+    park = PARKS[park_id]
+    if curve is not None:
+        kw = power_kw(speed, curve["points"], cut_out=curve["cut_out"])
+    elif park_id == "fryslan":
+        kw = cubic_power_kw(speed, **{k: FRYSLAN_SCENARIO[k] for k in ("rated_kw", "cut_in", "rated_speed", "cut_out")})
+    else:
+        return None
+    return kw * park["count"] / 1000
 
 
 def parse_wind(payload: dict, station: str) -> list[tuple[datetime, float | None]]:
@@ -122,6 +141,7 @@ def build_profile(day: date, stations: dict[str, str] | None = None, client: KNM
     features = client.locations().get("features", [])
     available = {f["id"]: f for f in features}
     profiles = {}
+    local = ZoneInfo("Europe/Amsterdam")
     for park_id, park in PARKS.items():
         station_id = (stations or {}).get(park_id) or park["station"]
         if station_id not in available:
@@ -131,17 +151,30 @@ def build_profile(day: date, stations: dict[str, str] | None = None, client: KNM
         wind = interpolate_minutes(samples, moments)
         hub = [None if v is None else v * (park["hub_height"] / 10) ** park["alpha"] for v in wind]
         curve = load_curve(park_id)
-        power = [None if v is None or curve is None else power_kw(v, curve["points"], cut_out=curve["cut_out"]) * park["count"] / 1000 for v in hub]
+        power = [park_power_mw(v, park_id, curve) for v in hub]
+        reference_points = []
+        for t, value in samples:
+            if moments[0] <= t < moments[-1] + timedelta(minutes=1):
+                aswind = None if value is None else value * (park["hub_height"] / 10) ** park["alpha"]
+                reference_points.append({"timestamp": t.astimezone(local).isoformat(), "wind_ms": value,
+                                         "power_mw": park_power_mw(aswind, park_id, curve)})
+        curve_metadata = ({k: v for k, v in curve.items() if k != "points"} if curve is not None
+                          else dict(FRYSLAN_SCENARIO) if park_id == "fryslan" else None)
         profiles[park_id] = {
             **park, "station": available[station_id], "wind_ms": wind, "hub_wind_ms": hub,
             "power_mw": power, "missing_wind_minutes": wind.count(None),
-            "curve": None if curve is None else {k: v for k, v in curve.items() if k != "points"},
+            "curve": curve_metadata, "reference_points": reference_points,
             "energy_mwh": sum(power) / 60 if None not in power else None,
             "observations": [{"interval_end": (t + timedelta(minutes=5)).isoformat(), "wind_ms": v} for t, v in samples],
         }
     combined = combined_mw(profiles["fryslan"]["power_mw"], profiles["beabuorren"]["power_mw"])
-    local = ZoneInfo("Europe/Amsterdam")
+    references = [{p["timestamp"]: p["power_mw"] for p in profiles[key]["reference_points"]} for key in PARKS]
+    combined_points = []
+    for stamp in sorted(set(references[0]) | set(references[1]), key=datetime.fromisoformat):
+        a, b = references[0].get(stamp), references[1].get(stamp)
+        combined_points.append({"timestamp": stamp, "power_mw": None if a is None or b is None else a + b})
     return {"date": day.isoformat(), "timezone": "Europe/Amsterdam", "minutes": len(moments),
             "timestamps": [t.astimezone(local).isoformat() for t in moments], "parks": profiles,
-            "combined_mw": combined, "combined_energy_mwh": sum(combined) / 60 if None not in combined else None,
+            "combined_mw": combined, "combined_reference_points": combined_points,
+            "combined_energy_mwh": sum(combined) / 60 if None not in combined else None,
             "method": "KNMI-tienminutengemiddelden, geplaatst op intervalmidden en lineair geïnterpoleerd. Geen extrapolatie of overbrugging van meetgaten. Hoogtecorrectie met vaste exponent; geen zogverlies, afregeling, stilstand of luchtdichtheidcorrectie."}
