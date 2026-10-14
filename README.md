@@ -50,7 +50,8 @@ blijven ontbrekend. De Nederlandse kalenderdag volgt zomer- en wintertijd.
 Beabuorren gebruikt een gepubliceerde secundaire turbinecurve. Fryslân gebruikt
 standaard een expliciet benaderd kubisch model: in de aanloop
 `P = 4300 * (v³ - 3³) / (11.5³ - 3³)` kW per turbine, met wind op ashoogte
-(standaard station Houtribdijk, `α = 0,18`, geijkt op vier productiedagen).
+(standaard station Houtribdijk; `α` van 0,18 in de winter tot 0,05 in de zomer,
+geijkt op zes productiedagen).
 Onder 3 m/s is het vermogen nul, van 11,5 tot en met 25 m/s 4.300 kW, boven
 25 m/s nul. De drie snelheidgrenzen zijn gekozen scenario-aannames, geen
 bevestigde turbinespecificaties. Alle drie de grafieken tonen nu geschat vermogen.

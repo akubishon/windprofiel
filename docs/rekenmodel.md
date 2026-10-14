@@ -13,16 +13,25 @@ v_h=v_{10}\left(\frac{h}{10}\right)^\alpha
 
 `v₁₀` is KNMI-variabele `ff`: windsnelheid in m/s, representatief voor 10 meter.
 `h` is de ashoogte in meters. `α` bepaalt de toename met de hoogte. Fryslân
-gebruikt `h = 115 m, α = 0,18`; Beabuorren `h = 60 m, α = 0,20`.
+gebruikt `h = 115 m` en een exponent die met het seizoen meebeweegt;
+Beabuorren `h = 60 m, α = 0,20`:
+
+\[
+\alpha_\mathrm{Fryslân}(n)=0{,}115+0{,}065\cos\left(\frac{2\pi(n-1)}{365}\right)
+\]
+
+`n` is het dagnummer in het jaar (1 = 1 januari). Begin januari is `α` 0,18,
+begin juli 0,05, in april en oktober circa 0,115.
 Deze correctie verandert het niveau van de hele reeks en daarmee, via de
 vermogenscurve, ook de grootte van de schommelingen.
 
 De [wind profile power law](https://en.wikipedia.org/wiki/Wind_profile_power_law)
 beschrijft de empirische formule en de afhankelijkheid van terrein en
 atmosferische stabiliteit. De bron noemt circa 0,11 boven open water in neutrale
-omstandigheden. In stabiele winterlucht is de toename met de hoogte groter.
-**0,18 voor Fryslân is geijkt op productiedata (sectie 7); 0,20 voor land is een
-modelkeuze, geen gemeten exponent voor Beabuorren.** Een vaste exponent van
+omstandigheden. Op de onderzochte dagen nam de wind in de winter veel sterker
+met de hoogte toe dan in de zomer. **De Fryslân-seizoensformule is geijkt op
+productiedata (sectie 7); 0,20 voor land is een modelkeuze, geen gemeten
+exponent voor Beabuorren.** Een vaste exponent van
 10 naar 115 meter kan aanzienlijke onzekerheid geven. De formule corrigeert
 alleen hoogte, niet de afstand of terreinverschillen tussen station en park.
 
@@ -162,41 +171,37 @@ De oorspronkelijke keuze, Stavoren met `α = 0,10`, gaf voor 4 december 2025
 exponent geijkt op dagopbrengsten uit de app van Windpark Fryslân, met het
 kubische model en 5 % zogverlies:
 
-| Dag | Productie | Model (Houtribdijk, α 0,18) | Oud (Stavoren, α 0,10) |
-| --- | --- | --- | --- |
-| 4 december 2025 | ~4,5 GWh | 4,6 GWh | 1,7 GWh |
-| 18 december 2025 | 8,8 GWh | 8,9 GWh | 7,5 GWh |
-| 19 december 2025 | 5,9 GWh | 5,7 GWh | 1,9 GWh |
-| 28 december 2025 | 0,78 GWh | 0,55 GWh | 0,03 GWh |
+| Dag | Productie | Model (Houtribdijk, seizoens-α) | α die dag | Oud (Stavoren, α 0,10) |
+| --- | --- | --- | --- | --- |
+| 4 december 2025 | ~4,5 GWh | 4,4 GWh | 0,17 | 1,7 GWh |
+| 18 december 2025 | 8,8 GWh | 8,9 GWh | 0,18 | 7,5 GWh |
+| 19 december 2025 | 5,9 GWh | 5,6 GWh | 0,18 | 2,1 GWh |
+| 28 december 2025 | 0,78 GWh | 0,55 GWh | 0,18 | 0,06 GWh |
+| 20 juli 2025 | 0,76 GWh | 0,75 GWh | 0,05 | — |
+| 22 juli 2025 | 3,2 GWh | 3,4 GWh | 0,05 | — |
+| 7 juli 2025 | 1,3 GWh | 5,2 GWh | 0,05 | — |
 
-Gezocht is over zeven stations binnen 45 km en `α` van 0,05 tot 0,40. Houtribdijk
-gaf de kleinste afwijking (circa 180 MWh RMS); Stavoren haalde op zijn best
-circa 600 MWh, met een veel hogere exponent. Houtribdijk ligt midden in het
-IJsselmeer en vangt vermoedelijk de wind boven open water beter dan het
-kuststation Stavoren.
+Gezocht is over acht stations binnen 45 km en een vaste `α` per seizoen.
+Houtribdijk gaf in de winter de kleinste afwijking (circa 180 MWh RMS, beste
+`α` 0,18); Stavoren haalde op zijn best circa 600 MWh. Houtribdijk ligt midden
+in het IJsselmeer en vangt vermoedelijk de wind boven open water beter dan het
+kuststation Stavoren. Voor 20 en 22 juli gaf Houtribdijk de beste `α` van 0,04
+tot 0,05. Voor 20 juli volgt het model met `α = 0,05` ook het uurverloop uit de
+app van Windpark Fryslân (rustige ochtend, piek rond 16–17 uur) met een
+gemiddelde afwijking van circa 18 MWh per uur. De cosinus verbindt beide
+seizoenswaarden zonder sprong.
 
-1 januari 2026 (6,7 GWh) is niet meegenomen: de wind was de hele dag even sterk
-als op 18 december en elk model geeft vrijwel vol vermogen (~9,1 GWh). Het
-verschil past bij afregeling of stilstand, die dit model niet kent.
+Niet meegenomen zijn 1 januari 2026 (6,7 GWh; het model geeft bij de harde wind
+van die dag vrijwel vol vermogen, ~9,1 GWh) en 7 juli 2025 (1,3 GWh; ook met
+`α = 0` geeft het model nog ~3,9 GWh). Beide verschillen passen bij afregeling of
+stilstand, die dit model niet kent. Het model geeft de productie die met de wind
+mogelijk is, niet wat het park werkelijk levert.
 
-Drie zomerdagen passen niet bij dit model, ook niet met `α = 0`:
-
-| Dag | Productie | Model | Model met 9–18 uur stil |
-| --- | --- | --- | --- |
-| 7 juli 2025 | 1,3 GWh | 7,0 GWh | 3,6 GWh |
-| 20 juli 2025 | 0,76 GWh | 1,9 GWh | 0,85 GWh |
-| 22 juli 2025 | 3,2 GWh | 6,6 GWh | 3,4 GWh |
-
-Het waaide op Houtribdijk overdag stevig, terwijl de productie laag bleef. Als
-het park van 9 tot 18 uur stilstaat, kloppen 20 en 22 juli vrijwel. Dat past bij
-afregeling rond de zonnepiek, maar is **niet bevestigd**; 7 juli blijft ook dan
-te hoog. Deze dagen zijn daarom niet gebruikt voor de ijking. Het model geeft de
-productie die met de wind mogelijk is, niet wat het park werkelijk levert.
-
-**Vier dagen is een kleine steekproef**, alle in de winter. Op stabiele
-winterdagen is de exponent hoger dan in een onstabiele zomer, dus in de zomer
-kan het model overschatten. Meer productiedagen uit andere seizoenen zijn nodig
-om dit te controleren.
+**Dit is een kleine steekproef**: vier winter- en twee zomerdagen. Voorjaar en
+herfst zijn niet gecontroleerd; daar is de cosinus een interpolatie. De
+seizoensformule is empirisch en beschrijft niet het weer van de dag: een
+stabiele zomernacht of een onstabiele winterdag krijgt dezelfde `α` als de rest
+van het seizoen.
 
 ## Bronnen en status van de getallen
 
@@ -206,8 +211,8 @@ om dit te controleren.
 | Fryslân | 89 × 4,3 MW | [Exploitant](https://www.windparkfryslan.nl/onderwerpen/windturbines/) |
 | Fryslân-ashoogte | circa 115 m | Afgeleid: 180 m tiphoogte − 130 m rotordiameter / 2, [factsheet](https://www.windparkfryslan.nl/wp-content/uploads/2020/05/Factsheet-Windpark-Fryslan.pdf) |
 | Fryslân-grenzen | 3 / 11,5 / 25 m/s | Afgesproken scenario-keuze; niet bevestigd door fabrikant |
-| Hoogte-exponenten | 0,18 Fryslân / 0,20 land | Fryslân geijkt op vier dagen (sectie 7); land is een modelkeuze; [achtergrond](https://en.wikipedia.org/wiki/Wind_profile_power_law) |
-| Fryslân-station | Houtribdijk (`06258`) | Beste aansluiting op productiedata van de vijf IJsselmeer- en kuststations (sectie 7) |
+| Hoogte-exponenten | Fryslân 0,05 (zomer) tot 0,18 (winter) / 0,20 land | Fryslân geijkt op zes dagen (sectie 7); land is een modelkeuze; [achtergrond](https://en.wikipedia.org/wiki/Wind_profile_power_law) |
+| Fryslân-station | Houtribdijk (`06258`) | Beste aansluiting op productiedata van de acht onderzochte stations (sectie 7) |
 | Beabuorren | 8 turbines, 10,4 MW | [Onderhoudsbedrijf Rengineers](https://rengineers.eu/nieuw/wynpark-beaborren-25-jaar/) |
 | Beabuorren-model | SWT-1.3-62 | [The Wind Power](https://www.thewindpower.net/windfarm_en_6263_beabuorren.php), secundaire bron |
 | Beabuorren-ashoogte | 60 m | [Lokaal bericht uit 2007](https://tsjerkwert.nl/start-opschaling-van-het-wynpark/); niet bevestigd voor alle acht turbines |
