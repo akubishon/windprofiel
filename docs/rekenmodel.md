@@ -290,6 +290,10 @@ met de gebruikte (0,115 + 0,065 cos); die is daarom gehouden. Een scherpere ijki
 vraagt uurdata, waarin afregelen te herkennen is als een vlak niveau onder het
 vermogen of een plotselinge daling bij aanhoudende wind.
 
+De dagproductie staat in `windprofiel/data/productie_fryslan.csv`; deze toetsing is
+te herhalen met `python3 -m windprofiel.ijking` (enkele minuten, zonder nieuwe
+aanvragen bij de app van Windpark Fryslân).
+
 ## Bronnen en status van de getallen
 
 | Gegeven | Waarde | Onderbouwing |

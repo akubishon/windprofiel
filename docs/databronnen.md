@@ -69,6 +69,16 @@ hoogste wind van Houtribdijk en Stavoren; Beabuorren houdt Stavoren. Over 2022�
 sluit die combinatie beter aan op de dagproductie dan Houtribdijk alleen
 ([rekenmodel, sectie 7](rekenmodel.md#toetsing-op-vier-jaar-dagproductie-20222025)).
 
+## Productiedata Windpark Fryslân
+
+`windprofiel/data/productie_fryslan.csv` bevat de dagproductie van Windpark Fryslân
+van 1 januari 2022 tot en met 31 december 2025 (1.461 dagen, kolommen `datum` en
+`productie_kwh`). De waarden komen uit de app van Windpark Fryslân, opgehaald in
+oktober 2026 met `scripts/fetch-graph.cjs` uit de repository `windpark-fryslan`
+(één aanvraag per maand). Het is gemeten productie inclusief afregelen en stilstand.
+Zes dagen staan op 0. `python3 -m windprofiel.ijking` toetst de hoogte-exponent
+hierop zonder nieuwe aanvragen bij de app.
+
 ## Windpark Fryslân
 
 - **89 turbines van 4,3 MW, 382,7 MW**: [exploitant](https://www.windparkfryslan.nl/onderwerpen/windturbines/).

@@ -139,9 +139,10 @@ is geen certificering van de bron.
 | `windprofiel/application.py` | parkgegevens, profielberekening en CSV |
 | `windprofiel/server.py` | lokale webserver en API |
 | `windprofiel/opsplitsing.py` | simulatie elektrolyser in N modules, met cache |
+| `windprofiel/ijking.py` | toetst de hoogte-exponent van Fryslân op opgeslagen productiedata |
 | `windprofiel/preview.py` | maakt de zelfstandige `index.html` |
 | `windprofiel/static/` | pagina's, JavaScript, CSS en lettertype (TASA Orbiter, SIL OFL) |
-| `windprofiel/data/` | curve van Beabuorren |
+| `windprofiel/data/` | curve van Beabuorren, dagproductie Windpark Fryslân 2022–2025 |
 | `tests/` | unit-tests zonder netwerk |
 | `docs/` | rekenmodel en databronnen |
 
