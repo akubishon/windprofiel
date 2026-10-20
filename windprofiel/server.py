@@ -11,8 +11,13 @@ from urllib.parse import parse_qs, urlsplit
 
 from .application import PARKS, ROOT, build_profile, csv_rows, parse_alpha, validate_curve
 from .knmi import KNMIClient, KNMIError, load_env_file
+from . import opsplitsing
 
 STATIC = Path(__file__).parent / "static"
+FILES = {"/": ("index.html", "text/html"), "/app.js": ("app.js", "text/javascript"), "/style.css": ("style.css", "text/css"),
+         "/opsplitsing": ("opsplitsing.html", "text/html"), "/opsplitsing.js": ("opsplitsing.js", "text/javascript"),
+         "/opsplitsing.css": ("opsplitsing.css", "text/css")}
+FONT = "/fonts/tasa-orbiter.ttf"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -31,10 +36,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         request = urlsplit(self.path)
-        if request.path in ("/", "/app.js", "/style.css"):
-            name = {"/": "index.html", "/app.js": "app.js", "/style.css": "style.css"}[request.path]
-            mime = {"index.html": "text/html", "app.js": "text/javascript", "style.css": "text/css"}[name]
+        if request.path in FILES:
+            name, mime = FILES[request.path]
             self.respond(200, (STATIC / name).read_bytes(), mime + "; charset=utf-8")
+            return
+        if request.path == FONT:
+            self.respond(200, (STATIC / "fonts" / "tasa-orbiter.ttf").read_bytes(), "font/ttf")
+            return
+        if request.path == "/api/opsplitsing/aannames":
+            self.json_response(200, opsplitsing.meta_json())
             return
         if request.path not in ("/api/stations", "/api/profile", "/api/export.csv"):
             self.json_response(404, {"error": "Niet gevonden."})
@@ -62,13 +72,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlsplit(self.path).path
+        origin = self.headers.get("Origin")
+        if origin and urlsplit(origin).netloc != self.headers.get("Host"):
+            self.json_response(403, {"error": "Gebruik de webapp voor deze aanvraag."})
+            return
+        if path in ("/api/opsplitsing", "/api/opsplitsing/dag"):
+            self.opsplitsing(path)
+            return
         park_id = path.removeprefix("/api/curves/")
         if not path.startswith("/api/curves/") or park_id not in PARKS:
             self.json_response(404, {"error": "Niet gevonden."})
-            return
-        origin = self.headers.get("Origin")
-        if origin and urlsplit(origin).netloc != self.headers.get("Host"):
-            self.json_response(403, {"error": "Gebruik de webapp om een curve toe te voegen."})
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -82,6 +95,34 @@ class Handler(BaseHTTPRequestHandler):
             self.json_response(200, {"saved": True, "model": curve["model"]})
         except (ValueError, TypeError, UnicodeError) as exc:
             self.json_response(400, {"error": str(exc)})
+
+    def opsplitsing(self, path: str):
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= 20_000 or self.headers.get_content_type() != "application/json":
+                raise ValueError("Stuur de aannames als JSON van maximaal 20 kB.")
+            body = json.loads(self.rfile.read(length))
+            a = opsplitsing.parse_aannames(body.get("aannames", {}))
+            strategy = body.get("strategie", "verdelen")
+            counts = body.get("modules", opsplitsing.MODULE_COUNTS)
+            if strategy not in opsplitsing.STRATEGIES:
+                raise ValueError("Onbekende besturing.")
+            if not isinstance(counts, list) or not counts or any(n not in opsplitsing.MODULE_COUNTS for n in counts):
+                raise ValueError("Kies moduleaantallen uit de lijst.")
+            if path == "/api/opsplitsing":
+                years = body.get("jaren", opsplitsing.available_years())
+                if not isinstance(years, list) or not years or any(y not in opsplitsing.available_years() for y in years):
+                    raise ValueError("Kies windjaren uit de lijst.")
+                self.json_response(200, opsplitsing.run(a, sorted(set(years)), counts, strategy))
+            else:
+                day = date.fromisoformat(str(body.get("datum", "")))
+                if day.year not in opsplitsing.available_years():
+                    raise ValueError("Kies een dag in een van de windjaren.")
+                self.json_response(200, opsplitsing.day_trace(a, day, counts, strategy))
+        except KNMIError as exc:
+            self.json_response(502, {"error": str(exc)})
+        except (ValueError, TypeError, AttributeError, UnicodeError) as exc:
+            self.json_response(400, {"error": str(exc) or "Ongeldige aanvraag."})
 
 
 def main():
