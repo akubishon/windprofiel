@@ -254,6 +254,42 @@ seizoensformule is empirisch en beschrijft niet het weer van de dag: een
 stabiele zomernacht of een onstabiele winterdag krijgt dezelfde `α` als de rest
 van het seizoen.
 
+### Toetsing op vier jaar dagproductie (2022–2025)
+
+In oktober 2026 is de formule getoetst op de dagproductie uit de app van Windpark
+Fryslân voor 2022–2025: 1.442 volledige dagen met KNMI-wind en productie. Afregelen
+en stilstand verlagen de productie alleen, dus een kleinste-kwadratenfit op alle
+dagen trekt `α` omlaag. Daarom zijn dagen waarop de productie onder een grens maal
+het model bleef (en minstens 0,5 GWh lager) als verdacht weggelaten en is opnieuw
+gefit tot de selectie stabiel was.
+
+| Wind voor Fryslân | Beste `α` (grens 75 %) | RMS-afwijking per dag | Verdachte dagen |
+| --- | --- | ---: | ---: |
+| Houtribdijk | 0,110 + 0,065 cos | 0,82 GWh | 418 |
+| Hoogste van Houtribdijk en Stavoren per tien minuten | 0,095 + 0,070 cos | 0,77 GWh | 383 |
+
+De hoogste van beide stations sluit beter aan. Meet Stavoren weinig terwijl
+Houtribdijk wel wind ziet, of andersom, dan volgt het park de hoogste lijn. De
+opsplitsingspagina gebruikt daarom voor Fryslân deze combinatie; Beabuorren houdt
+Stavoren.
+
+De seizoensamplitude (circa 0,07) is stabiel, het niveau van `α` niet: dat hangt af
+van de grens voor verdachte dagen.
+
+| Grens | Beste `α` (winter / zomer) | Behouden dagen |
+| ---: | --- | ---: |
+| 65 % | 0,155 / 0,015 | 1.198 |
+| 75 % | 0,165 / 0,025 | 1.059 |
+| 85 % | 0,180 / 0,050 | 791 |
+| geen | 0,135 / 0,0 | 1.442 |
+
+De verdachte dagen liggen verspreid over alle maanden en zijn nauwelijks vaker
+weekenddagen. Uit dagtotalen is afregelen dus niet te scheiden van stilstand of
+gewone modelspreiding. Bij een grens van 85 % valt de best passende formule samen
+met de gebruikte (0,115 + 0,065 cos); die is daarom gehouden. Een scherpere ijking
+vraagt uurdata, waarin afregelen te herkennen is als een vlak niveau onder het
+vermogen of een plotselinge daling bij aanhoudende wind.
+
 ## Bronnen en status van de getallen
 
 | Gegeven | Waarde | Onderbouwing |

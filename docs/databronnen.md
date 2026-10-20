@@ -64,6 +64,11 @@ van Beabuorren. Er zijn geen metingen in de turbinegondels gebruikt; in de webap
 is per park een ander station te kiezen. Afstand, windrichting en omgeving
 bepalen hoe representatief een station is.
 
+De opsplitsingspagina (`/opsplitsing`) gebruikt voor Fryslân per tien minuten de
+hoogste wind van Houtribdijk en Stavoren; Beabuorren houdt Stavoren. Over 2022–2025
+sluit die combinatie beter aan op de dagproductie dan Houtribdijk alleen
+([rekenmodel, sectie 7](rekenmodel.md#toetsing-op-vier-jaar-dagproductie-20222025)).
+
 ## Windpark Fryslân
 
 - **89 turbines van 4,3 MW, 382,7 MW**: [exploitant](https://www.windparkfryslan.nl/onderwerpen/windturbines/).
