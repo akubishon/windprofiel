@@ -75,19 +75,29 @@ Meer uitleg:
 Open <http://127.0.0.1:8000/opsplitsing> (of de link bovenaan de startpagina). De
 pagina rekent door of een elektrolyser van 44 MW beter in één module of in 2 tot 16
 gelijke modules kan, op vier volledige windjaren (2022–2025). De voeding is dezelfde
-als op mijnwindpark.nl: 10 % van Windpark Fryslân plus heel Wynpark Beabuorren.
+als op mijnwindpark.nl: 10 % van Windpark Fryslân plus heel Wynpark Beabuorren. Windpark
+Fryslân krijgt hier per tien minuten de hoogste KNMI-wind van Houtribdijk en Stavoren; die
+lijn past beter bij wat het park zelf levert dan één station. Beabuorren houdt Stavoren.
 
 - **Zo werkt de analyse** laat in zes stappen zien hoe de berekening loopt, met een
-  schets van de startdrempels en de rendementscurve per module.
-- **Aannames**: elke aanname is aan te passen (minimumlast, rendement, BoP, aan- en
-  uittijden, startvertraging, onderhoud en storingen, slijtage en kosten). De
-  standaardwaarden zijn plaatshouders; vervang ze door datasheets en offertes.
-  Je wijzigingen blijven in je browser bewaard.
+  schets van de startdrempels, de rendementscurve per module en een uitleg waarom een
+  heel jaar per tien minuten in seconden is doorgerekend.
+- **Aannames**: kies **PEM** of **Alkaline** voor de standaardwaarden uit de EU
+  LCOH-tool (Clean Hydrogen Partnership): CAPEX, energieverbruik, stacklevensduur en
+  -degradatie, stackvervanging, OPEX, stroomprijs, netkosten, belasting, rente en
+  looptijd. Wat die tool niet geeft, zoals minimumlast (PEM 10 %, alkaline 20 %) en
+  opstarttijden, is een plaatshouder. Elk veld toont zijn bron. Alles is aan te passen;
+  je wijzigingen blijven in je browser bewaard. De categorieën staan dicht, met een
+  samenvatting; de uitleg per veld zit achter ⓘ. Subsidies en opbrengsten (CAPEX-subsidie,
+  waterstofpremie, korting op netkosten en belasting, zuurstofverkoop) geven ook de
+  netto kosten per kilo.
 - **Uitkomst**: knikpunt, extra waterstof en de *maximale CAPEX*: hoeveel een
   configuratie hooguit mag kosten om per kilo niet duurder te zijn dan één module.
   Dat getal hangt niet af van de aangenomen kostenschaal en is het getal om offertes
   aan te toetsen.
 - **Een dag van dichtbij** vergelijkt het verbruik van 1 module en N modules per tien minuten.
+  Kies een moment in de grafiek: zes kaarten rekenen dat moment met de echte getallen door,
+  van KNMI-wind tot kilo's waterstof.
 
 De eerste berekening haalt de vier windjaren één keer bij KNMI op (een paar seconden
 per jaar). Het aanbod per jaar en elke uitkomst worden in `.cache/opsplitsing/`
@@ -98,6 +108,7 @@ Zonder webpagina, met gevoeligheden voor minimumlast, CAPEX en windjaar:
 
 ```sh
 python3 -m windprofiel.opsplitsing                              # schrijft uitvoer/opsplitsing/resultaten.csv
+python3 -m windprofiel.opsplitsing --technologie alkaline       # standaard: pem
 python3 -m windprofiel.opsplitsing --aannames mijn-offerte.json # bijvoorbeeld {"minimumlast": 10, "capex_eur_kw": 1700}
 ```
 
@@ -128,9 +139,10 @@ is geen certificering van de bron.
 | `windprofiel/application.py` | parkgegevens, profielberekening en CSV |
 | `windprofiel/server.py` | lokale webserver en API |
 | `windprofiel/opsplitsing.py` | simulatie elektrolyser in N modules, met cache |
+| `windprofiel/ijking.py` | toetst de hoogte-exponent van Fryslân op opgeslagen productiedata |
 | `windprofiel/preview.py` | maakt de zelfstandige `index.html` |
 | `windprofiel/static/` | pagina's, JavaScript, CSS en lettertype (TASA Orbiter, SIL OFL) |
-| `windprofiel/data/` | curve van Beabuorren |
+| `windprofiel/data/` | curve van Beabuorren, dagproductie Windpark Fryslân 2022–2025 |
 | `tests/` | unit-tests zonder netwerk |
 | `docs/` | rekenmodel en databronnen |
 
