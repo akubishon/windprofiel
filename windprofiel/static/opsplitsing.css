@@ -86,6 +86,7 @@ input[type=radio],input[type=checkbox]{accent-color:var(--ink);width:16px;height
 .source{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.4px;padding:1px 6px;margin-right:4px;border-radius:0 6px 0 0;vertical-align:1px}
 .source.eu{background:var(--ink);color:#fff}
 .source.site{background:var(--sky);color:var(--ink)}
+.source.own{background:var(--accent);color:var(--ink)}
 .source.placeholder{background:var(--paper);color:var(--ink);border:1px dashed var(--muted)}
 .text-button{background:none;border:0;padding:4px 0;font-size:12px;text-decoration:underline;color:var(--ink)}
 .form-actions{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:24px}

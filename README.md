@@ -91,10 +91,12 @@ lijn past beter bij wat het park zelf levert dan één station. Beabuorren houdt
   samenvatting; de uitleg per veld zit achter ⓘ. Subsidies en opbrengsten (CAPEX-subsidie,
   waterstofpremie, korting op netkosten en belasting, zuurstofverkoop) geven ook de
   netto kosten per kilo.
-- **Uitkomst**: knikpunt, extra waterstof en de *maximale CAPEX*: hoeveel een
-  configuratie hooguit mag kosten om per kilo niet duurder te zijn dan één module.
-  Dat getal hangt niet af van de aangenomen kostenschaal en is het getal om offertes
-  aan te toetsen.
+- **Kosten**: de CAPEX volgt uit een referentieofferte (standaard 60 M€ voor 50 MW in
+  10 units van 5 MW) als prijs per kW plus vaste kosten per module (gelijkrichter,
+  transformator, besturing). Stackwissels kosten stilstand (standaard 4 weken per wissel).
+- **Uitkomst**: knikpunt, extra waterstof en per aantal modules de *maximale vaste kosten
+  per module*: tot welk bedrag per unit opsplitsen per kilo goedkoper blijft dan één
+  module. Dat is het getal om offertes aan te toetsen.
 - **Een dag van dichtbij** vergelijkt het verbruik van 1 module en N modules per tien minuten.
   Kies een moment in de grafiek: zes kaarten rekenen dat moment met de echte getallen door,
   van KNMI-wind tot kilo's waterstof.
@@ -109,7 +111,7 @@ Zonder webpagina, met gevoeligheden voor minimumlast, CAPEX en windjaar:
 ```sh
 python3 -m windprofiel.opsplitsing                              # schrijft uitvoer/opsplitsing/resultaten.csv
 python3 -m windprofiel.opsplitsing --technologie alkaline       # standaard: pem
-python3 -m windprofiel.opsplitsing --aannames mijn-offerte.json # bijvoorbeeld {"minimumlast": 10, "capex_eur_kw": 1700}
+python3 -m windprofiel.opsplitsing --aannames mijn-offerte.json # bijvoorbeeld {"minimumlast": 10, "vaste_kosten_module_meur": 0.5}
 ```
 
 Beperkingen: tienminutengemiddelden verbergen kortere schommelingen; de rendementscurve
