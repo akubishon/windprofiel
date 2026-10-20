@@ -45,7 +45,7 @@ main{padding:0 6.25% 40px}
 figcaption,.note{font-size:12px;color:var(--muted);margin-top:8px}
 
 /* Formulier */
-.choices{display:grid;grid-template-columns:1.4fr 1fr 1.2fr;gap:18px;margin-bottom:22px}
+.choices{display:grid;grid-template-columns:.7fr 1.4fr 1fr 1.2fr;gap:18px;margin-bottom:22px}
 fieldset{border:1px solid var(--line);border-radius:0 18px 0 0;padding:14px 18px 16px;margin:0;min-width:0}
 legend{font-weight:600;padding:0 6px;font-size:14px}
 .radio-list,.check-list{display:flex;flex-wrap:wrap;gap:8px 16px}
@@ -64,6 +64,10 @@ input[type=radio],input[type=checkbox]{accent-color:var(--ink);width:16px;height
 .field input[aria-invalid=true]{border-color:#b3261e;box-shadow:inset 4px 0 #b3261e}
 .field small{grid-column:1/-1;font-size:12px;color:var(--muted);line-height:1.45}
 .field .default{color:var(--muted)}
+.source{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.4px;padding:1px 6px;margin-right:4px;border-radius:0 6px 0 0;vertical-align:1px}
+.source.eu{background:var(--ink);color:#fff}
+.source.site{background:var(--sky);color:var(--ink)}
+.source.placeholder{background:var(--paper);color:var(--ink);border:1px dashed var(--muted)}
 .text-button{background:none;border:0;padding:4px 0;font-size:12px;text-decoration:underline;color:var(--ink)}
 .form-actions{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:24px}
 .primary-button,.secondary-button{border-radius:0 12px 0 0;font-size:14px;padding:11px 18px;border:1px solid var(--ink)}

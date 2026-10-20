@@ -3,7 +3,7 @@
 
 const $ = id => document.getElementById(id);
 const SVG = "http://www.w3.org/2000/svg";
-const STORE = "opsplitsing-v1";
+const STORE = "opsplitsing-v2";   // v2: technologiekeuze en EU-standaardwaarden
 const COLORS = {one: "#22528F", many: "#0094C6", wash: "#C3E4F2", ink: "#0C2340", muted: "#465970"};
 const nf = (value, digits = 1) => value == null || !isFinite(value) ? "–"
   : new Intl.NumberFormat("nl-NL", {minimumFractionDigits: digits, maximumFractionDigits: digits}).format(value);
@@ -11,6 +11,10 @@ const pct = (value, digits = 1) => (value > 0 ? "+" : "") + nf(value * 100, digi
 const label = n => `${n} module${n === 1 ? "" : "s"}`;
 
 let meta = null;
+let tech = "pem";
+const standard = key => meta.technologieen[tech].waarden[key];
+const show = value => nf(value, decimals(value)).replace(/\s|\./g, "");
+const SOURCE_CLASS = {"EU LCOH-tool": "eu", "mijnwindpark.nl": "site", "plaatshouder": "placeholder"};
 let lastResult = null;
 let running = false;
 
@@ -55,12 +59,12 @@ function field(item, value) {
   const wrap = document.createElement("div");
   wrap.className = "field";
   const id = "f-" + item.key;
+  const base = standard(item.key);
   wrap.innerHTML = `<label for="${id}">${item.label}${item.eenheid ? ` <span class="unit">(${item.eenheid})</span>` : ""}</label>
     <input id="${id}" inputmode="decimal" autocomplete="off" data-key="${item.key}">
-    <small>${item.uitleg ? item.uitleg + " " : ""}<span class="default">Standaard ${nf(item.standaard, decimals(item.standaard))}.</span></small>`;
+    <small><span class="source ${SOURCE_CLASS[item.bron]}">${item.bron}</span> ${item.uitleg ? item.uitleg + " " : ""}<span class="default">Standaard ${meta.technologieen[tech].naam}: ${nf(base, decimals(base))}.</span></small>`;
   const input = wrap.querySelector("input");
-  input.value = nf(value, decimals(value)).replace(/ |\./g, "");
-  input.dataset.standaard = item.standaard;
+  input.value = show(value);
   input.addEventListener("input", () => { validate(input); remember(); drawExplainers(); });
   validate(input);
   return wrap;
@@ -87,7 +91,7 @@ function validate(input) {
   const ok = isFinite(value) && value >= entry.min && value <= entry.max;
   input.setAttribute("aria-invalid", String(!ok));
   input.title = ok ? "" : `Kies ${nf(entry.min, decimals(entry.min))} tot ${nf(entry.max, decimals(entry.max))}`;
-  input.classList.toggle("changed", ok && Math.abs(value - entry.standaard) > 1e-9);
+  input.classList.toggle("changed", ok && Math.abs(value - standard(entry.key)) > 1e-9);
   return ok;
 }
 
@@ -109,12 +113,21 @@ function remember() {
   const changed = {};
   const current = values();
   for (const [key, value] of Object.entries(current)) {
-    if (isFinite(value) && Math.abs(value - item(key).standaard) > 1e-9) changed[key] = value;
+    if (isFinite(value) && Math.abs(value - standard(key)) > 1e-9) changed[key] = value;
   }
-  save({aannames: changed, ...selection()});
+  save({technologie: tech, aannames: changed, ...selection()});
 }
 
 function buildForm(state) {
+  tech = meta.technologieen[state.technologie] ? state.technologie : "pem";
+  $("technologies").replaceChildren(...Object.entries(meta.technologieen).map(([key, entry]) => {
+    const labelNode = document.createElement("label");
+    labelNode.innerHTML = `<input type="radio" name="technologie" value="${key}"><span><b>${entry.naam}</b></span>`;
+    const input = labelNode.querySelector("input");
+    input.checked = key === tech;
+    input.addEventListener("change", () => switchTechnology(key));
+    return labelNode;
+  }));
   $("strategies").replaceChildren(...Object.entries(meta.strategieen).map(([key, description]) => {
     const labelNode = document.createElement("label");
     labelNode.innerHTML = `<input type="radio" name="strategie" value="${key}"><span><b>${key[0].toUpperCase() + key.slice(1)}</b><small>${description}</small></span>`;
@@ -139,24 +152,38 @@ function buildForm(state) {
     reset.addEventListener("click", () => {
       for (const entry of group.velden) {
         const input = $("f-" + entry.key);
-        input.value = nf(entry.standaard, decimals(entry.standaard)).replace(/ |\./g, "");
+        input.value = show(standard(entry.key));
         validate(input);
       }
       remember(); drawExplainers();
     });
     set.append(reset);
-    for (const entry of group.velden) set.append(field(entry, state.aannames?.[entry.key] ?? entry.standaard));
+    for (const entry of group.velden) set.append(field(entry, state.aannames?.[entry.key] ?? standard(entry.key)));
     return set;
   }));
 }
 
 // ---------------------------------------------------------------- uitleg
 
-// Spiegelt stack_kg_h en draw_mw in opsplitsing.py.
-function kgPerMWh(x, v) {
+// Wisselen zet alle velden op de standaard van die technologie; eigen wijzigingen vervallen.
+function switchTechnology(key) {
+  const changed = document.querySelectorAll(".field input.changed").length;
+  if (changed && !confirm(`Alle velden op de standaardwaarden voor ${meta.technologieen[key].naam} zetten? ${changed} eigen ${changed === 1 ? "wijziging vervalt" : "wijzigingen vervallen"}.`)) {
+    document.querySelector(`input[name=technologie][value=${tech}]`).checked = true;
+    return;
+  }
+  buildForm({...selection(), technologie: key, aannames: {}});
+  remember();
+  drawExplainers();
+}
+
+// Spiegelt stack_sec_full, stack_kg_h en draw_mw in opsplitsing.py; v in getoonde eenheden.
+function kgPerMWh(x, v, ageing = true) {
   if (x <= 0 || x < v.minimumlast / 100 - 1e-9) return 0;
   const faraday = Math.max(0, 1 - (v.faradayverlies_10 / 100) * 0.1 / x);
-  const sec = (v.sec_laag + (v.sec_vol - v.sec_laag) * x) * (1 + v.rendementsverlies_eind / 200);
+  const full = v.systeemverbruik_vol * (1 - v.faradayverlies_10 / 100 * 0.1) / (1 + v.bop_variabel / 100 + v.bop_vast / 100);
+  const wear = ageing ? v.degradatie_1000h / 100 * v.stack_levensduur_uur / 1000 / 2 : 0;
+  const sec = full * (1 - v.deellastvoordeel / 100 * (1 - x)) * (1 + wear);
   const draw = x * (1 + v.bop_variabel / 100) + v.bop_vast / 100;
   return x * 1000 / sec * faraday / draw;
 }
@@ -234,7 +261,7 @@ function drawEfficiency(v) {
     svg.append(hit);
   }
   $("efficiency-chart").replaceChildren(svg);
-  $("efficiency-caption").textContent = `Systeemverbruik op vollast ${nf(1000 / kgPerMWh(1, v))} kWh/kg. Volgt de aannames uit stap 2.`;
+  $("efficiency-caption").textContent = `Gemiddeld over het stackleven. Op vollast ${nf(1000 / kgPerMWh(1, v))} kWh/kg; een nieuwe stack ${nf(1000 / kgPerMWh(1, v, false))} kWh/kg. Volgt de aannames uit stap 2.`;
 }
 
 // ---------------------------------------------------------------- grafieken per aantal modules
@@ -530,8 +557,8 @@ async function start() {
   $("form").addEventListener("submit", submit);
   $("form").addEventListener("change", remember);
   $("reset").addEventListener("click", () => {
-    save({});
-    buildForm({});
+    buildForm({...selection(), technologie: tech, aannames: {}});
+    remember();
     drawExplainers();
   });
   $("day-run").addEventListener("click", runDay);

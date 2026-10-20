@@ -54,8 +54,8 @@
         <div class="explain-grid">
           <figure class="explain">
             <h3>Waarom opsplitsen helpt</h3>
-            <p>De minimumlast geldt per module. Eén module van 44 MW start pas bij ruim 10 MW aanbod; vier modules van 11 MW al bij 2,7 MW.
-              Alles onder de drempel gaat verloren.</p>
+            <p>De minimumlast geldt per module. Eén grote module start pas als het aanbod boven haar minimumlast komt; vier modules van een kwart
+              van de grootte starten bij een kwart van dat aanbod. Alles onder de drempel gaat verloren.</p>
             <svg id="threshold-art" viewBox="0 0 440 220" role="img" aria-labelledby="threshold-title">
               <title id="threshold-title">Schets: een golvend windaanbod met twee drempels. De lage drempel van een kleine module laat meer aanbod door dan de hoge drempel van één grote module.</title>
             </svg>
@@ -73,11 +73,13 @@
       <section class="panel" aria-labelledby="input-title">
         <div class="step-heading"><span class="step-number">2</span><div>
           <h2 id="input-title">Aannames</h2>
-          <p>Alles is aan te passen. De standaardwaarden zijn plaatshouders; vervang ze door datasheets en offertes van leveranciers.
-            Je wijzigingen blijven in deze browser bewaard.</p>
+          <p>Kies PEM of alkaline voor de standaardwaarden van de EU LCOH-tool (Clean Hydrogen Partnership). Wat die tool niet geeft,
+            zoals minimumlast en opstarttijden, staat als plaatshouder; elk veld zegt waar de waarde vandaan komt. Alles is aan te passen
+            en je wijzigingen blijven in deze browser bewaard.</p>
         </div></div>
         <form id="form" novalidate>
           <div class="choices">
+            <fieldset><legend>Technologie</legend><div id="technologies" class="radio-list"></div></fieldset>
             <fieldset><legend>Besturing</legend><div id="strategies" class="radio-list"></div></fieldset>
             <fieldset><legend>Windjaren</legend><div id="years" class="check-list"></div></fieldset>
             <fieldset><legend>Aantal modules</legend><div id="counts" class="check-list"></div></fieldset>
@@ -85,7 +87,7 @@
           <div id="groups" class="groups"></div>
           <div class="form-actions">
             <button class="primary-button" type="submit" id="run">Bereken</button>
-            <button class="secondary-button" type="button" id="reset">Alle standaardwaarden</button>
+            <button class="secondary-button" type="button" id="reset">Alle standaardwaarden van deze technologie</button>
             <span id="status" role="status" aria-live="polite"></span>
           </div>
         </form>

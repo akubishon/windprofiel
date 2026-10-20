@@ -1,8 +1,8 @@
 import unittest
 from dataclasses import replace
 
-from windprofiel.opsplitsing import (AANNAMES_META, Aannames, break_even, desired_count, draw_mw, economics,
-                                     parse_aannames, simulate, stack_kg_h, summarise)
+from windprofiel.opsplitsing import (AANNAMES_META, TECHNOLOGIES, Aannames, break_even, desired_count, draw_mw, economics,
+                                     parse_aannames, power_price, simulate, stack_kg_h, summarise)
 
 STILL = Aannames(onderhoud_dagen=0, storingen_per_jaar=0, startvertraging_min=0, min_aan_min=0, min_uit_min=0)
 
@@ -19,6 +19,13 @@ class OpsplitsingTests(unittest.TestCase):
 
     def test_bop_is_ten_percent_at_full_load_like_the_website(self):
         self.assertAlmostEqual(draw_mw(44, 44, Aannames()), 48.4)
+
+    def test_new_stack_at_full_load_matches_eu_tool_consumption(self):
+        for name, a in TECHNOLOGIES.values():
+            fresh = replace(a, degradatie_1000h=0)
+            self.assertAlmostEqual(draw_mw(44, 44, fresh) * 1000 / stack_kg_h(44, 44, fresh), a.systeemverbruik_vol, msg=name)
+        self.assertEqual(TECHNOLOGIES["alkaline"][1].capex_eur_kw, 2075)
+        self.assertAlmostEqual(power_price(Aannames()), 110.91)
 
     def test_dispatch_respects_minimum_and_capacity(self):
         a = Aannames(minimumlast=0.2)

@@ -79,10 +79,12 @@ als op mijnwindpark.nl: 10 % van Windpark Fryslân plus heel Wynpark Beabuorren.
 
 - **Zo werkt de analyse** laat in zes stappen zien hoe de berekening loopt, met een
   schets van de startdrempels en de rendementscurve per module.
-- **Aannames**: elke aanname is aan te passen (minimumlast, rendement, BoP, aan- en
-  uittijden, startvertraging, onderhoud en storingen, slijtage en kosten). De
-  standaardwaarden zijn plaatshouders; vervang ze door datasheets en offertes.
-  Je wijzigingen blijven in je browser bewaard.
+- **Aannames**: kies **PEM** of **Alkaline** voor de standaardwaarden uit de EU
+  LCOH-tool (Clean Hydrogen Partnership): CAPEX, energieverbruik, stacklevensduur en
+  -degradatie, stackvervanging, OPEX, stroomprijs, netkosten, belasting, rente en
+  looptijd. Wat die tool niet geeft, zoals minimumlast (PEM 10 %, alkaline 20 %) en
+  opstarttijden, is een plaatshouder. Elk veld toont zijn bron. Alles is aan te passen;
+  je wijzigingen blijven in je browser bewaard.
 - **Uitkomst**: knikpunt, extra waterstof en de *maximale CAPEX*: hoeveel een
   configuratie hooguit mag kosten om per kilo niet duurder te zijn dan één module.
   Dat getal hangt niet af van de aangenomen kostenschaal en is het getal om offertes
@@ -98,6 +100,7 @@ Zonder webpagina, met gevoeligheden voor minimumlast, CAPEX en windjaar:
 
 ```sh
 python3 -m windprofiel.opsplitsing                              # schrijft uitvoer/opsplitsing/resultaten.csv
+python3 -m windprofiel.opsplitsing --technologie alkaline       # standaard: pem
 python3 -m windprofiel.opsplitsing --aannames mijn-offerte.json # bijvoorbeeld {"minimumlast": 10, "capex_eur_kw": 1700}
 ```
 
