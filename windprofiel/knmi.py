@@ -120,6 +120,16 @@ class KNMIClient:
         final = end < datetime.now(timezone.utc) - timedelta(days=1)
         return self._get("/locations/" + quote(station_id, safe=""), query, cacheable=final)
 
+    def observations_range(self, station_id: str, start: datetime, end: datetime) -> dict:
+        """Tienminutenwaarden over een willekeurige afgesloten periode, bijvoorbeeld een heel jaar."""
+        if not station_id:
+            raise ValueError("Een geverifieerd KNMI-station-ID is vereist.")
+        if end > datetime.now(timezone.utc) - timedelta(days=1):
+            raise ValueError("Alleen afgesloten perioden; recente metingen kunnen nog veranderen.")
+        stamp = lambda dt: dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        query = {"datetime": f"{stamp(start)}/{stamp(end)}", "parameter-name": "ff,dd"}
+        return self._get("/locations/" + quote(station_id, safe=""), query)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Controleer KNMI EDR-toegang zonder sleutels te tonen.")
