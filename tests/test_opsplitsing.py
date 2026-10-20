@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from windprofiel.application import load_curve
 
-from windprofiel.opsplitsing import (AANNAMES_META, TECHNOLOGIES, Aannames, break_even, desired_count, draw_mw, economics,
+from windprofiel.opsplitsing import (AANNAMES_META, TECHNOLOGIES, Aannames, break_even, combine_wind, desired_count, draw_mw, economics,
                                      park_mw, parse_aannames, power_price, simulate, stack_kg_h, summarise, wind_steps)
 
 STILL = Aannames(onderhoud_dagen=0, storingen_per_jaar=0, startvertraging_min=0, min_aan_min=0, min_uit_min=0)
@@ -114,6 +114,12 @@ class OpsplitsingTests(unittest.TestCase):
             step = wind_steps(park_id, 7.5, stamp, curve)
             self.assertAlmostEqual(step["mw"], park_mw(park_id, 7.5, datetime.fromtimestamp(stamp, timezone.utc), curve), places=3)
             self.assertAlmostEqual(step["v_as"], 7.5 * (step["ashoogte"] / 10) ** step["alpha"], places=2)
+
+    def test_combined_wind_takes_the_highest_station_and_fills_gaps(self):
+        moments, speeds, sources = combine_wind({"houtribdijk": {1: 6.0, 2: 3.0, 3: None}, "stavoren": {1: 4.0, 2: 5.0, 4: 2.0}})
+        self.assertEqual(moments, [1, 2, 4])
+        self.assertEqual(speeds, [6.0, 5.0, 2.0])
+        self.assertEqual(sources, ["houtribdijk", "stavoren", "stavoren"])
 
     def test_parse_aannames_uses_displayed_units_and_bounds(self):
         self.assertAlmostEqual(parse_aannames({"minimumlast": 30}).minimumlast, 0.30)

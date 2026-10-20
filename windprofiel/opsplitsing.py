@@ -3,7 +3,9 @@
 Vraag: levert een 44 MW-elektrolyser in N modules meer waterstof en een lagere
 LCOH op dan in minder, grotere modules? De voeding is hetzelfde aandeel als op
 mijnwindpark.nl: 10 % van Windpark Fryslân plus Wynpark Beabuorren, uit
-KNMI-tienminutenwaarden met het rekenmodel van deze app.
+KNMI-tienminutenwaarden met het rekenmodel van deze app. Fryslân krijgt per tien
+minuten de hoogste wind van Houtribdijk en Stavoren (`combine_wind`), Beabuorren
+alleen Stavoren.
 
 Alle elektrolyser- en kostengetallen in `Aannames` zijn plaatshouders, geen
 leveranciers- of literatuurwaarden. Vervang ze door datasheets en offertes;
@@ -30,13 +32,16 @@ from zoneinfo import ZoneInfo
 from .application import PARKS, ROOT, load_curve, park_power_mw, parse_wind, shear_exponent
 from .knmi import KNMIClient, KNMIError, load_env_file
 
-MODEL_VERSION = 6   # verhogen bij elke rekenwijziging; maakt oude uitkomsten in de cache ongeldig
+MODEL_VERSION = 7   # verhogen bij elke rekenwijziging; maakt oude uitkomsten in de cache ongeldig
 STEP_H = 1 / 6
 FRYSLAN_SHARE = 0.10
 CACHE = ROOT / ".cache" / "opsplitsing"
 LOCAL = ZoneInfo("Europe/Amsterdam")
 FIRST_YEAR = 2022   # eerste volledige jaar met Windpark Fryslân in bedrijf
-STATION_NAMES = {"fryslan": "Houtribdijk", "beabuorren": "Stavoren"}   # vaste stations van PARKS
+# Windpark Fryslân krijgt per tien minuten de hoogste wind van deze twee stations: meet Stavoren
+# weinig terwijl Houtribdijk wel wind ziet, dan past de hoogste lijn beter bij de productie van Fryslân.
+# Wynpark Beabuorren houdt alleen Stavoren, het dichtstbijzijnde station.
+STATIONS = {"houtribdijk": ("Houtribdijk", "0-20000-0-06258"), "stavoren": ("Stavoren", "0-20000-0-06267")}
 MODULE_COUNTS = [1, 2, 3, 4, 6, 8, 11, 16]
 STRATEGIES = {
     "verdelen": "Per tijdstap het aantal modules dat de meeste waterstof geeft, last gelijk verdeeld.",
@@ -213,34 +218,48 @@ def available_years() -> list[int]:
 
 # ---------------------------------------------------------------- windaanbod
 
+def combine_wind(series: dict[str, dict]) -> tuple[list, list[float], list[str]]:
+    """Per moment de hoogste windsnelheid van de stations; ontbreekt er één, dan telt de andere."""
+    moments, speeds, sources = [], [], []
+    for moment in sorted(set().union(*(values.keys() for values in series.values()))):
+        present = [(values[moment], key) for key, values in series.items() if values.get(moment) is not None]
+        if not present:
+            continue
+        speed, key = max(present)
+        moments.append(moment)
+        speeds.append(speed)
+        sources.append(key)
+    return moments, speeds, sources
+
+
 def supply_year(year: int, client: KNMIClient | None = None) -> dict:
     """Bruto toegewezen windvermogen (MW) per tien minuten met tijdstempels; meetgaten vallen weg.
 
     Bewaard per jaar en per parkmodel, zodat een volgende run niets bij KNMI hoeft op te halen.
     """
-    model = hashlib.sha256(json.dumps([PARKS, FRYSLAN_SHARE, load_curve("fryslan"), load_curve("beabuorren")],
+    model = hashlib.sha256(json.dumps([PARKS, STATIONS, FRYSLAN_SHARE, load_curve("fryslan"), load_curve("beabuorren")],
                                       sort_keys=True, default=str).encode()).hexdigest()[:12]
-    path = CACHE / f"aanbod2-{year}-{model}.json"   # aanbod2: met windsnelheden per station
+    path = CACHE / f"aanbod4-{year}-{model}.json"   # aanbod4: Fryslân hoogste van beide stations, Beabuorren Stavoren
     if path.exists():
         return json.loads(path.read_text())
     client = client or KNMIClient(ROOT / ".cache" / "knmi")
     start = datetime(year, 1, 1, tzinfo=LOCAL).astimezone(timezone.utc)
     end = datetime(year + 1, 1, 1, tzinfo=LOCAL).astimezone(timezone.utc)
-    series, speeds = {}, {}
-    for park_id, park in PARKS.items():
-        samples = parse_wind(client.observations_range(park["station"], start, end), park["station"])
-        curve = load_curve(park_id)
-        power, wind = {}, {}
-        for moment, speed in samples:
-            if speed is None or not start <= moment < end:
-                continue
-            power[moment] = park_mw(park_id, speed, moment, curve)
-            wind[moment] = speed
-        series[park_id], speeds[park_id] = power, wind
-    shared = sorted(series["fryslan"].keys() & series["beabuorren"].keys())
-    data = {"jaar": year, "t": [int(t.timestamp()) for t in shared],
-            "mw": [round(FRYSLAN_SHARE * series["fryslan"][t] + series["beabuorren"][t], 4) for t in shared],
-            "v10": {park_id: [speeds[park_id][t] for t in shared] for park_id in PARKS}}
+    measured = {}
+    for key, (_, station) in STATIONS.items():
+        samples = parse_wind(client.observations_range(station, start, end), station)
+        measured[key] = {moment: speed for moment, speed in samples if speed is not None and start <= moment < end}
+    combined = combine_wind(measured)
+    stavoren = measured["stavoren"]
+    # Zonder Stavoren-meting is Beabuorren onbekend; zo'n moment valt weg, net als andere meetgaten.
+    rows = [(t, v, source) for t, v, source in zip(*combined) if t in stavoren]
+    curves = {park_id: load_curve(park_id) for park_id in PARKS}
+    data = {"jaar": year, "t": [int(t.timestamp()) for t, _, _ in rows],
+            "mw": [round(FRYSLAN_SHARE * park_mw("fryslan", v, t, curves["fryslan"])
+                         + park_mw("beabuorren", stavoren[t], t, curves["beabuorren"]), 4) for t, v, _ in rows],
+            "v10": {"fryslan": [v for _, v, _ in rows], "beabuorren": [stavoren[t] for t, _, _ in rows]},
+            "bron": [source for _, _, source in rows],
+            "stations": {key: [measured[key].get(t) for t, _, _ in rows] for key in STATIONS}}
     CACHE.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(data))
@@ -604,10 +623,11 @@ def day_trace(a: Aannames, day: date, counts: list[int], strategy: str) -> dict:
                   "waterstof_kg": result["dagen"].get(day.isoformat(), [0])[0],
                   "drempel_mw": draw_mw(a.minimumlast * result["module_mw"], result["module_mw"], a)}
     curves = {park_id: load_curve(park_id) for park_id in PARKS}
-    wind = [{park_id: wind_steps(park_id, supply["v10"][park_id][picked[i]], window["t"][i], curves[park_id])
-             for park_id in PARKS} for i in visible]
+    wind = [{**{park_id: wind_steps(park_id, supply["v10"][park_id][picked[i]], window["t"][i], curves[park_id]) for park_id in PARKS},
+             "knmi": {key: supply["stations"][key][picked[i]] for key in STATIONS}, "gekozen": supply["bron"][picked[i]]}
+            for i in visible]
     return {"datum": day.isoformat(), "configuraties": out, "wind": wind, "aandeel_fryslan": FRYSLAN_SHARE,
-            "stations": STATION_NAMES, "parken": {park_id: park["name"] for park_id, park in PARKS.items()}}
+            "stations": {key: name for key, (name, _) in STATIONS.items()}, "parken": {park_id: park["name"] for park_id, park in PARKS.items()}}
 
 
 # ---------------------------------------------------------------- opdrachtregel

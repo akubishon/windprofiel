@@ -698,14 +698,24 @@ function moduleBars(step, size, color) {
 function windSpark(data, index) {
   const W = 260, H = 70, T = 6, B = 62;
   const series = Object.keys(data.stations);
-  const top = niceTop(Math.max(...data.wind.flatMap(w => series.map(p => w[p].v10)), 1));
+  const all = data.wind.flatMap(w => series.map(key => w.knmi[key]).filter(v => v != null));
+  const top = niceTop(Math.max(...all, 1));
   const px = i => i / (data.wind.length - 1) * W, py = v => B - v / top * (B - T);
   const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, class: "spark", "aria-hidden": "true"});
   svg.append(el("line", {x1: 0, x2: W, y1: B, y2: B, class: "axis"}));
-  series.forEach((park, k) => {
+  series.forEach((key, k) => {
     const color = k ? COLORS.many : COLORS.one;
-    svg.append(el("polyline", {points: data.wind.map((w, i) => `${px(i).toFixed(1)},${py(w[park].v10).toFixed(1)}`).join(" "), fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round"}),
-      el("circle", {cx: px(index), cy: py(data.wind[index][park].v10), r: 4.5, fill: color, stroke: "#fff", "stroke-width": 2}));
+    // Meetgaten onderbreken de lijn.
+    let path = "", pen = false;
+    data.wind.forEach((w, i) => {
+      const v = w.knmi[key];
+      if (v == null) { pen = false; return; }
+      path += `${pen ? "L" : "M"}${px(i).toFixed(1)},${py(v).toFixed(1)} `;
+      pen = true;
+    });
+    svg.append(el("path", {d: path, fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round"}));
+    const v = data.wind[index].knmi[key];
+    if (v != null) svg.append(el("circle", {cx: px(index), cy: py(v), r: key === data.wind[index].gekozen ? 5.5 : 3.5, fill: color, stroke: "#fff", "stroke-width": 2}));
   });
   svg.append(el("line", {x1: px(index), x2: px(index), y1: T, y2: B, stroke: COLORS.ink, "stroke-width": 1}));
   return svg;
@@ -717,7 +727,8 @@ function renderWalk() {
   const one = cfg(data, 1), many = cfg(data, n);
   const a = one.stappen[index], b = many.stappen[index];
   const share = data.aandeel_fryslan;
-  const parks = Object.keys(data.stations);
+  const parks = Object.keys(data.parken);
+  const stations = Object.keys(data.stations);
   const sumKg = s => s.kg.reduce((x, y) => x + y, 0);
   const kWh = (x, size) => x > 0 ? (x * (1 + v.bop_variabel / 100) + v.bop_vast / 100 * size) * 1000 / 6 : 0;
 
@@ -764,10 +775,13 @@ function renderWalk() {
       ${nf(r1.lcoh_eur_kg, 2)} en ${nf(rn.lcoh_eur_kg, 2)} € (stap 3).</p>` : "";
   })();
 
-  const legend = `<p class="legend small">${parks.map((p, k) => `<span>${swatch(k ? COLORS.many : COLORS.one)} ${data.stations[p]}</span>`).join("")}</p>`;
+  const legend = `<p class="legend small">${stations.map((key, k) => `<span>${swatch(k ? COLORS.many : COLORS.one)} ${data.stations[key]}</span>`).join("")}</p>`;
+  const measured = stations.map(key => `${data.stations[key]} ${wind.knmi[key] == null ? "geen meting" : `<b>${nf(wind.knmi[key])} m/s</b>`}`).join(" · ");
   $("walk").replaceChildren(
     card("A", "KNMI-wind op 10 m", [legend, windSpark(data, index),
-      `<p class="calc">${parks.map(p => `${data.stations[p]} <b>${nf(wind[p].v10)} m/s</b>`).join(" · ")}<br>Tienminutengemiddelde van het KNMI.</p>`]),
+      `<p class="calc">${measured}<br>Fryslân: de hoogste, <b>${nf(wind.fryslan.v10)} m/s</b> van ${data.stations[wind.gekozen]}.
+       <br>Beabuorren: Stavoren, <b>${nf(wind.beabuorren.v10)} m/s</b>.</p>
+       <p class="note">Tienminutengemiddelden van het KNMI. Voor Fryslân past de hoogste lijn beter bij wat het park zelf levert dan één station.</p>`]),
     card("B", "Wind op ashoogte en parkvermogen", parks.map(windLine)),
     card("C", "Aanbod voor de elektrolyser", `<p class="calc">${nf(share, 1)} × ${nf(wind.fryslan.mw)} + ${nf(wind.beabuorren.mw)}<br><b class="big">= ${nf(a.aanbod)} MW</b></p>
       <p class="note">10 % van Windpark Fryslân plus heel Beabuorren, zoals op mijnwindpark.nl.</p>`),

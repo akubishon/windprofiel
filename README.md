@@ -75,7 +75,9 @@ Meer uitleg:
 Open <http://127.0.0.1:8000/opsplitsing> (of de link bovenaan de startpagina). De
 pagina rekent door of een elektrolyser van 44 MW beter in één module of in 2 tot 16
 gelijke modules kan, op vier volledige windjaren (2022–2025). De voeding is dezelfde
-als op mijnwindpark.nl: 10 % van Windpark Fryslân plus heel Wynpark Beabuorren.
+als op mijnwindpark.nl: 10 % van Windpark Fryslân plus heel Wynpark Beabuorren. Windpark
+Fryslân krijgt hier per tien minuten de hoogste KNMI-wind van Houtribdijk en Stavoren; die
+lijn past beter bij wat het park zelf levert dan één station. Beabuorren houdt Stavoren.
 
 - **Zo werkt de analyse** laat in zes stappen zien hoe de berekening loopt, met een
   schets van de startdrempels, de rendementscurve per module en een uitleg waarom een
