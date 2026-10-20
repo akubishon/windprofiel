@@ -68,6 +68,10 @@
             <figcaption id="efficiency-caption">Volgt de aannames uit stap 2.</figcaption>
           </figure>
         </div>
+        <details class="speed" id="speed">
+          <summary>Hoe kan een heel jaar, elke tien minuten, zo snel?</summary>
+          <div id="speed-body"></div>
+        </details>
       </section>
 
       <section class="panel" aria-labelledby="input-title">
@@ -111,8 +115,8 @@
             <div id="capex-chart" class="chart"></div>
           </figure>
           <figure class="chart-card">
-            <h3>Kosten per kilo (LCOH)</h3>
-            <p>Met de aangenomen CAPEX en schaalfactor; de streep toont de spreiding tussen windjaren.</p>
+            <h3 id="lcoh-title">Kosten per kilo (LCOH)</h3>
+            <p id="lcoh-note">Met de aangenomen CAPEX en schaalfactor; de streep toont de spreiding tussen windjaren.</p>
             <div id="lcoh-chart" class="chart"></div>
           </figure>
           <figure class="chart-card">
@@ -141,6 +145,16 @@
         <div id="day-legend" class="legend"></div>
         <div id="day-chart" class="chart day-chart"></div>
         <p id="day-summary" class="note"></p>
+        <div class="walk-head">
+          <div>
+            <h3>Rekenvoorbeeld: één moment van tien minuten</h3>
+            <p class="note">Klik of sleep in de grafiek, of gebruik de schuif. De kaarten rekenen dat ene moment stap voor stap door,
+              met dezelfde formules als de jaarberekening. Het hele jaar is deze som, herhaald voor elke tien minuten.</p>
+          </div>
+          <label class="step-picker">Tijdstip <output id="step-time"></output>
+            <input type="range" id="step" min="0" max="143" value="72" aria-describedby="step-time"></label>
+        </div>
+        <ol class="flow walk" id="walk"></ol>
       </section>
 
       <footer>KNMI EDR · rekenmodel windprofiel · plaatshouders voor leveranciersgegevens · TASA Orbiter onder SIL Open Font License</footer>

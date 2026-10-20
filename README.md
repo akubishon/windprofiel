@@ -78,18 +78,24 @@ gelijke modules kan, op vier volledige windjaren (2022–2025). De voeding is de
 als op mijnwindpark.nl: 10 % van Windpark Fryslân plus heel Wynpark Beabuorren.
 
 - **Zo werkt de analyse** laat in zes stappen zien hoe de berekening loopt, met een
-  schets van de startdrempels en de rendementscurve per module.
+  schets van de startdrempels, de rendementscurve per module en een uitleg waarom een
+  heel jaar per tien minuten in seconden is doorgerekend.
 - **Aannames**: kies **PEM** of **Alkaline** voor de standaardwaarden uit de EU
   LCOH-tool (Clean Hydrogen Partnership): CAPEX, energieverbruik, stacklevensduur en
   -degradatie, stackvervanging, OPEX, stroomprijs, netkosten, belasting, rente en
   looptijd. Wat die tool niet geeft, zoals minimumlast (PEM 10 %, alkaline 20 %) en
   opstarttijden, is een plaatshouder. Elk veld toont zijn bron. Alles is aan te passen;
-  je wijzigingen blijven in je browser bewaard.
+  je wijzigingen blijven in je browser bewaard. De categorieën staan dicht, met een
+  samenvatting; de uitleg per veld zit achter ⓘ. Subsidies en opbrengsten (CAPEX-subsidie,
+  waterstofpremie, korting op netkosten en belasting, zuurstofverkoop) geven ook de
+  netto kosten per kilo.
 - **Uitkomst**: knikpunt, extra waterstof en de *maximale CAPEX*: hoeveel een
   configuratie hooguit mag kosten om per kilo niet duurder te zijn dan één module.
   Dat getal hangt niet af van de aangenomen kostenschaal en is het getal om offertes
   aan te toetsen.
 - **Een dag van dichtbij** vergelijkt het verbruik van 1 module en N modules per tien minuten.
+  Kies een moment in de grafiek: zes kaarten rekenen dat moment met de echte getallen door,
+  van KNMI-wind tot kilo's waterstof.
 
 De eerste berekening haalt de vier windjaren één keer bij KNMI op (een paar seconden
 per jaar). Het aanbod per jaar en elke uitkomst worden in `.cache/opsplitsing/`

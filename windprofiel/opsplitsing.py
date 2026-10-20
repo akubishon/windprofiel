@@ -17,7 +17,9 @@ import argparse
 import csv
 import hashlib
 import json
+import os
 import random
+import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import date, datetime, timedelta, timezone
@@ -28,12 +30,13 @@ from zoneinfo import ZoneInfo
 from .application import PARKS, ROOT, load_curve, park_power_mw, parse_wind, shear_exponent
 from .knmi import KNMIClient, KNMIError, load_env_file
 
-MODEL_VERSION = 5   # verhogen bij elke rekenwijziging; maakt oude uitkomsten in de cache ongeldig
+MODEL_VERSION = 6   # verhogen bij elke rekenwijziging; maakt oude uitkomsten in de cache ongeldig
 STEP_H = 1 / 6
 FRYSLAN_SHARE = 0.10
 CACHE = ROOT / ".cache" / "opsplitsing"
 LOCAL = ZoneInfo("Europe/Amsterdam")
 FIRST_YEAR = 2022   # eerste volledige jaar met Windpark Fryslân in bedrijf
+STATION_NAMES = {"fryslan": "Houtribdijk", "beabuorren": "Stavoren"}   # vaste stations van PARKS
 MODULE_COUNTS = [1, 2, 3, 4, 6, 8, 11, 16]
 STRATEGIES = {
     "verdelen": "Per tijdstap het aantal modules dat de meeste waterstof geeft, last gelijk verdeeld.",
@@ -77,6 +80,10 @@ class Aannames:
     belasting_eur_mwh: float = 3.80
     rente: float = 0.06
     looptijd_jaar: float = 20.0
+    capex_subsidie_eur_kw: float = 0.0
+    waterstofpremie_eur_kg: float = 0.0
+    korting_net_belasting_eur_mwh: float = 0.0
+    zuurstofprijs_eur_t: float = 0.0
 
 
 # Standaardwaarden per technologie. EU-waarden: Clean Hydrogen Partnership, LCOH-calculator,
@@ -88,7 +95,9 @@ TECHNOLOGIES = {
                                      stack_levensduur_uur=80000.0, capex_eur_kw=2075.0)),
 }
 EU_TOOL = {"systeemverbruik_vol", "degradatie_1000h", "stack_levensduur_uur", "capex_eur_kw", "stack_aandeel",
-           "opex_aandeel", "stroomprijs_eur_mwh", "netkosten_eur_mwh", "belasting_eur_mwh", "rente", "looptijd_jaar"}
+           "opex_aandeel", "stroomprijs_eur_mwh", "netkosten_eur_mwh", "belasting_eur_mwh", "rente", "looptijd_jaar",
+           "capex_subsidie_eur_kw", "waterstofpremie_eur_kg", "korting_net_belasting_eur_mwh", "zuurstofprijs_eur_t"}
+OXYGEN_KG_PER_KG = 8.0   # 2 H2O → 2 H2 + O2: 32 / 4
 WEBSITE = {"capaciteit_mw", "bop_vast", "bop_variabel"}
 
 
@@ -157,6 +166,14 @@ AANNAMES_META = [
         ("rente", "Rente", "%", 0, 20, 100, ""),
         ("looptijd_jaar", "Looptijd", "jaar", 5, 40, 1, ""),
     ]),
+    ("Subsidies en opbrengsten", [
+        ("capex_subsidie_eur_kw", "CAPEX-subsidie", "€/kW", 0, 5000, 1,
+         "Eenmalig per kW geïnstalleerd vermogen; verlaagt de te financieren investering. OPEX en stackvervanging blijven op de volle CAPEX."),
+        ("waterstofpremie_eur_kg", "Waterstofpremie", "€/kg", 0, 20, 1, "Vaste vergoeding of groene premie per kilo waterstof."),
+        ("korting_net_belasting_eur_mwh", "Korting netkosten en belasting", "€/MWh", 0, 200, 1,
+         "Verlaagt netkosten plus energiebelasting, nooit onder nul."),
+        ("zuurstofprijs_eur_t", "Zuurstofprijs", "€/t", 0, 1000, 1, "Per kilo waterstof ontstaat 8 kilo zuurstof; hier aangenomen dat alles wordt verkocht."),
+    ]),
 ]
 
 
@@ -203,31 +220,51 @@ def supply_year(year: int, client: KNMIClient | None = None) -> dict:
     """
     model = hashlib.sha256(json.dumps([PARKS, FRYSLAN_SHARE, load_curve("fryslan"), load_curve("beabuorren")],
                                       sort_keys=True, default=str).encode()).hexdigest()[:12]
-    path = CACHE / f"aanbod-{year}-{model}.json"
+    path = CACHE / f"aanbod2-{year}-{model}.json"   # aanbod2: met windsnelheden per station
     if path.exists():
         return json.loads(path.read_text())
     client = client or KNMIClient(ROOT / ".cache" / "knmi")
     start = datetime(year, 1, 1, tzinfo=LOCAL).astimezone(timezone.utc)
     end = datetime(year + 1, 1, 1, tzinfo=LOCAL).astimezone(timezone.utc)
-    series = {}
+    series, speeds = {}, {}
     for park_id, park in PARKS.items():
         samples = parse_wind(client.observations_range(park["station"], start, end), park["station"])
         curve = load_curve(park_id)
-        power = {}
+        power, wind = {}, {}
         for moment, speed in samples:
             if speed is None or not start <= moment < end:
                 continue
-            alpha = shear_exponent(park, moment.astimezone(LOCAL).date())
-            power[moment] = park_power_mw(speed * (park["hub_height"] / 10) ** alpha, park_id, curve, wake=True)
-        series[park_id] = power
+            power[moment] = park_mw(park_id, speed, moment, curve)
+            wind[moment] = speed
+        series[park_id], speeds[park_id] = power, wind
     shared = sorted(series["fryslan"].keys() & series["beabuorren"].keys())
     data = {"jaar": year, "t": [int(t.timestamp()) for t in shared],
-            "mw": [round(FRYSLAN_SHARE * series["fryslan"][t] + series["beabuorren"][t], 4) for t in shared]}
+            "mw": [round(FRYSLAN_SHARE * series["fryslan"][t] + series["beabuorren"][t], 4) for t in shared],
+            "v10": {park_id: [speeds[park_id][t] for t in shared] for park_id in PARKS}}
     CACHE.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(data))
     temporary.replace(path)
     return data
+
+
+def park_mw(park_id: str, speed: float, moment: datetime, curve: dict | None) -> float:
+    """KNMI-wind op 10 m naar parkvermogen, met hetzelfde model als de windprofielpagina."""
+    park = PARKS[park_id]
+    alpha = shear_exponent(park, moment.astimezone(LOCAL).date())
+    return park_power_mw(speed * (park["hub_height"] / 10) ** alpha, park_id, curve, wake=True)
+
+
+def wind_steps(park_id: str, speed: float, stamp: int, curve: dict | None) -> dict:
+    """Tussenwaarden van KNMI-wind tot parkvermogen, voor het rekenvoorbeeld."""
+    park = PARKS[park_id]
+    moment = datetime.fromtimestamp(stamp, timezone.utc)
+    alpha = shear_exponent(park, moment.astimezone(LOCAL).date())
+    hub = speed * (park["hub_height"] / 10) ** alpha
+    mw = park_power_mw(hub, park_id, curve, wake=True)
+    return {"v10": speed, "alpha": round(alpha, 4), "ashoogte": park["hub_height"], "v_as": round(hub, 3),
+            "zog": park["wake_deficit"], "v_turbine": round(hub * (1 - park["wake_deficit"]), 3),
+            "turbines": park["count"], "turbine_kw": round(mw * 1000 / park["count"], 1), "mw": round(mw, 3)}
 
 
 # ---------------------------------------------------------------- module
@@ -331,8 +368,11 @@ def simulate(supply: dict, n: int, a: Aannames, strategy: str, trace: range | No
         starters = [i for i in avail if not on[i] and off_h[i] >= min_off]
         fits = min(len(avail), floor(power / minimum)) if minimum > 0 else len(avail)
         k = desired_count(power, len(avail), size, a, strategy, memo)
+        wanted = k
+        resting = [i for i in avail if not on[i] and off_h[i] < min_off]
         want_h = want_h + STEP_H if k > len(running) else 0.0
-        if want_h < delay - 1e-9:
+        waiting = bool(starters) and want_h < delay - 1e-9
+        if waiting:
             starters = []
         k = max(min(k, len(running) + len(starters)), min(len(must), fits))
         k = min(k, fits, len(running) + len(starters))
@@ -350,6 +390,8 @@ def simulate(supply: dict, n: int, a: Aannames, strategy: str, trace: range | No
             for i in chosen:
                 loads[i] = share
         step_kg = 0.0
+        module_kg = [0.0] * n
+        starting = [0.0] * n
         for i in range(n):
             x = loads[i]
             if x >= a.minimumlast * size - 1e-9 and x > 0:
@@ -360,8 +402,10 @@ def simulate(supply: dict, n: int, a: Aannames, strategy: str, trace: range | No
                         warm[i] += 1; eq[i] += a.eq_uur_warme_start; startup[i] = a.opstart_warm_min
                     on[i], on_h[i] = True, 0.0
                 productive = max(0.0, 10 - startup[i]) / 10
+                starting[i] = min(10.0, startup[i])
                 startup[i] = max(0.0, startup[i] - 10)
-                step_kg += stack_kg_h(x, size, a) * STEP_H * productive
+                module_kg[i] = stack_kg_h(x, size, a) * STEP_H * productive
+                step_kg += module_kg[i]
                 used += draw_mw(x, size, a) * STEP_H
                 eq[i] += STEP_H + abs(x - stack[i]) / size / 2 * a.eq_uur_per_lastcyclus
                 hours[i] += STEP_H
@@ -382,9 +426,19 @@ def simulate(supply: dict, n: int, a: Aannames, strategy: str, trace: range | No
         entry[0] += step_kg
         entry[1] = max(entry[1], float(len(avail) < n))
         if trace is not None and step in trace:
+            reasons = []
+            if waiting and wanted > len(running):
+                reasons.append(f"startvertraging: al {round(want_h * 60)} van {round(a.startvertraging_min)} min genoeg wind")
+            if resting and wanted > len(running) + len(starters):
+                reasons.append(f"{len(resting)} net gestopt, minimale uit-tijd")
+            if len(must) > wanted and k > wanted:
+                reasons.append(f"{len(must)} houden minimale aan-tijd vast")
+            if len(avail) < n:
+                reasons.append(f"{n - len(avail)} in onderhoud of storing")
             steps.append({"t": stamp, "aanbod": power, "stack": [round(v, 3) for v in loads],
                           "verbruik": round(sum(draw_mw(v, size, a) for v in loads if v > 0), 3),
-                          "uit": [down[step][i] for i in range(n)]})
+                          "uit": [down[step][i] for i in range(n)], "kg": [round(v, 3) for v in module_kg],
+                          "opstart_min": starting, "gewenst": wanted, "passen": fits, "redenen": reasons})
     scale = 8760 / (len(mw) * STEP_H) if mw else 0   # meetgaten: herschalen naar een vol jaar
     supply_mwh = sum(mw) * STEP_H
     return {
@@ -404,7 +458,17 @@ def simulate(supply: dict, n: int, a: Aannames, strategy: str, trace: range | No
 # ---------------------------------------------------------------- kosten
 
 def power_price(a: Aannames) -> float:
-    return a.stroomprijs_eur_mwh + a.netkosten_eur_mwh + a.belasting_eur_mwh
+    levies = max(0.0, a.netkosten_eur_mwh + a.belasting_eur_mwh - a.korting_net_belasting_eur_mwh)
+    return a.stroomprijs_eur_mwh + levies
+
+
+def subsidy_eur(a: Aannames) -> float:
+    return a.capex_subsidie_eur_kw * a.capaciteit_mw * 1000
+
+
+def revenue_eur_kg(a: Aannames) -> float:
+    """Opbrengsten per kilo waterstof: premie en verkochte zuurstof."""
+    return a.waterstofpremie_eur_kg + a.zuurstofprijs_eur_t * OXYGEN_KG_PER_KG / 1000
 
 
 def crf(a: Aannames) -> float:
@@ -418,12 +482,14 @@ def economics(result: dict, a: Aannames) -> dict:
     # Continue benadering: elk equivalent bedrijfsuur verbruikt een deel van een stack.
     stack = sum(a.stack_aandeel * module_capex * e / a.stack_levensduur_uur for e in result["eq_uren_per_module"])
     power = (result["verbruik_mwh"] + result["standby_mwh"]) * power_price(a)
-    annual = capex * crf(a) + a.opex_aandeel * capex + stack + power
+    annual = (capex - subsidy_eur(a)) * crf(a) + a.opex_aandeel * capex + stack + power
     kg = result["waterstof_t"] * 1000
     wear = [e for e in result["eq_uren_per_module"] if e]
     return {"capex_meur": capex / 1e6, "stack_meur_jaar": stack / 1e6, "kosten_meur_jaar": annual / 1e6,
-            "stroom_meur_jaar": power / 1e6, "kapitaal_meur_jaar": capex * (crf(a) + a.opex_aandeel) / 1e6,
+            "stroom_meur_jaar": power / 1e6,
+            "kapitaal_meur_jaar": ((capex - subsidy_eur(a)) * crf(a) + a.opex_aandeel * capex) / 1e6,
             "lcoh_eur_kg": annual / kg if kg else None,
+            "netto_eur_kg": annual / kg - revenue_eur_kg(a) if kg else None,
             "jaren_tot_stackwissel": a.stack_levensduur_uur / max(wear) if wear else None}
 
 
@@ -436,8 +502,9 @@ def summarise(per_year: list[dict], a: Aannames) -> dict:
         elif isinstance(value, float):
             out[key] = sum(r[key] for r in per_year) / len(per_year)
     out.update(economics(out, a))
-    lcoh = [economics(r, a)["lcoh_eur_kg"] for r in per_year]
-    out["jaren"] = {r["jaar"]: {"waterstof_t": r["waterstof_t"], "lcoh_eur_kg": l} for r, l in zip(per_year, lcoh)}
+    costs = [economics(r, a) for r in per_year]
+    out["jaren"] = {r["jaar"]: {"waterstof_t": r["waterstof_t"], "lcoh_eur_kg": c["lcoh_eur_kg"], "netto_eur_kg": c["netto_eur_kg"]}
+                    for r, c in zip(per_year, costs)}
     return out
 
 
@@ -452,7 +519,9 @@ def break_even(rows: list[dict], a: Aannames) -> None:
         wear = sum(row["eq_uren_per_module"]) / row["modules"] / a.stack_levensduur_uur
         power = (row["verbruik_mwh"] + row["standby_mwh"]) * power_price(a)
         target = (single["lcoh_eur_kg"] or 0) * row["waterstof_t"] * 1000
-        row["capex_break_even_meur"] = (target - power) / (crf(a) + a.opex_aandeel + a.stack_aandeel * wear) / 1e6
+        # Bruto CAPEX; de subsidie is per kW en dus voor elke configuratie even groot.
+        row["capex_break_even_meur"] = ((target - power + subsidy_eur(a) * crf(a))
+                                        / (crf(a) + a.opex_aandeel + a.stack_aandeel * wear) / 1e6)
         if previous:
             row["extra_waterstof_t"] = row["waterstof_t"] - previous["waterstof_t"]
             row["extra_kosten_meur_jaar"] = row["kosten_meur_jaar"] - previous["kosten_meur_jaar"]
@@ -473,8 +542,11 @@ def run(a: Aannames, years: list[int], counts: list[int], strategy: str, workers
     key = hashlib.sha256(json.dumps([MODEL_VERSION, asdict(a), years, counts, strategy,
                                      [len(s["t"]) for s in supplies.values()]]).encode()).hexdigest()[:20]
     path = CACHE / f"uitkomst-{key}.json"
+    began = time.perf_counter()
+    steps = sum(len(s["t"]) for s in supplies.values())
     if path.exists():
-        return json.loads(path.read_text())
+        data = json.loads(path.read_text())
+        return {**data, "uit_cache": True, "rekentijd_s": time.perf_counter() - began}
     jobs = [(supplies[y], n, a, strategy) for n in counts for y in years]
     with ProcessPoolExecutor(workers) as pool:
         results = list(pool.map(_job, jobs))
@@ -486,10 +558,13 @@ def run(a: Aannames, years: list[int], counts: list[int], strategy: str, workers
     data = {"sleutel": key, "aannames": asdict(a), "strategie": strategy, "jaren": years, "rijen": rows,
             "voorbeelddag": example,
             "aanbod": {y: {"mwh": sum(s["mw"]) * STEP_H * 8760 / (len(s["mw"]) * STEP_H),
-                           "dekking_uur": len(s["mw"]) * STEP_H} for y, s in supplies.items()}}
+                           "dekking_uur": len(s["mw"]) * STEP_H} for y, s in supplies.items()},
+            "omvang": {"tijdstappen": steps, "configuraties": len(counts), "modules": sum(counts),
+                       "modulestappen": steps * sum(counts), "processen": workers or os.cpu_count()}}
+    data["eerste_rekentijd_s"] = time.perf_counter() - began
     CACHE.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data))
-    return data
+    return {**data, "uit_cache": False, "rekentijd_s": data["eerste_rekentijd_s"]}
 
 
 def example_day(results: list[dict], counts: list[int], years: list[int]) -> str | None:
@@ -521,20 +596,25 @@ def day_trace(a: Aannames, day: date, counts: list[int], strategy: str) -> dict:
     if not picked:
         raise ValueError("Geen windgegevens voor deze dag.")
     window = {"jaar": supply["jaar"], "t": [supply["t"][i] for i in picked], "mw": [supply["mw"][i] for i in picked]}
-    shown = range(next(i for i, t in enumerate(window["t"]) if t >= first), len(picked))
+    visible = range(next(i for i, t in enumerate(window["t"]) if t >= first), len(picked))
     out = {}
     for n in sorted(set(counts)):
-        result = simulate(window, n, a, strategy, trace=shown)
+        result = simulate(window, n, a, strategy, trace=visible)
         out[n] = {"module_mw": result["module_mw"], "stappen": result["stappen"],
-                  "waterstof_kg": result["dagen"].get(day.isoformat(), [0])[0]}
-    return {"datum": day.isoformat(), "configuraties": out}
+                  "waterstof_kg": result["dagen"].get(day.isoformat(), [0])[0],
+                  "drempel_mw": draw_mw(a.minimumlast * result["module_mw"], result["module_mw"], a)}
+    curves = {park_id: load_curve(park_id) for park_id in PARKS}
+    wind = [{park_id: wind_steps(park_id, supply["v10"][park_id][picked[i]], window["t"][i], curves[park_id])
+             for park_id in PARKS} for i in visible]
+    return {"datum": day.isoformat(), "configuraties": out, "wind": wind, "aandeel_fryslan": FRYSLAN_SHARE,
+            "stations": STATION_NAMES, "parken": {park_id: park["name"] for park_id, park in PARKS.items()}}
 
 
 # ---------------------------------------------------------------- opdrachtregel
 
 CSV_FIELDS = ["scenario", "strategie", "modules", "module_mw", "waterstof_t", "benutting", "bedrijfsuren_gem",
               "starts_warm_per_module", "starts_koud_per_module", "jaren_tot_stackwissel", "capex_meur",
-              "stack_meur_jaar", "kosten_meur_jaar", "lcoh_eur_kg", "capex_break_even_meur", "extra_waterstof_t",
+              "stack_meur_jaar", "kosten_meur_jaar", "lcoh_eur_kg", "netto_eur_kg", "capex_break_even_meur", "extra_waterstof_t",
               "extra_kosten_meur_jaar"]
 
 

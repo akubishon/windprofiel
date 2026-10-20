@@ -60,12 +60,14 @@ function field(item, value) {
   wrap.className = "field";
   const id = "f-" + item.key;
   const base = standard(item.key);
+  const hint = `${item.uitleg ? item.uitleg + " " : ""}Standaard ${meta.technologieen[tech].naam}: ${nf(base, decimals(base))}.`;
   wrap.innerHTML = `<label for="${id}">${item.label}${item.eenheid ? ` <span class="unit">(${item.eenheid})</span>` : ""}</label>
     <input id="${id}" inputmode="decimal" autocomplete="off" data-key="${item.key}">
-    <small><span class="source ${SOURCE_CLASS[item.bron]}">${item.bron}</span> ${item.uitleg ? item.uitleg + " " : ""}<span class="default">Standaard ${meta.technologieen[tech].naam}: ${nf(base, decimals(base))}.</span></small>`;
+    <div class="field-meta"><span class="source ${SOURCE_CLASS[item.bron]}">${item.bron}</span>
+      <details class="hint"><summary aria-label="Uitleg bij ${item.label}">ⓘ</summary><p>${hint}</p></details></div>`;
   const input = wrap.querySelector("input");
   input.value = show(value);
-  input.addEventListener("input", () => { validate(input); remember(); drawExplainers(); });
+  input.addEventListener("input", () => { validate(input); remember(); drawExplainers(); summarise(); });
   validate(input);
   return wrap;
 }
@@ -142,9 +144,14 @@ function buildForm(state) {
   }));
   checks("years", "jaar", meta.jaren, state.jaren?.length ? state.jaren : meta.jaren, String);
   checks("counts", "modules", meta.modules, state.modules?.length ? state.modules : meta.modules, String);
+  const opened = loadOpen();
   $("groups").replaceChildren(...meta.groepen.map(group => {
-    const set = document.createElement("fieldset");
-    set.innerHTML = `<legend>${group.naam}</legend>`;
+    const set = document.createElement("details");
+    set.className = "group";
+    set.dataset.group = group.naam;
+    set.open = opened.includes(group.naam);
+    set.innerHTML = `<summary><span class="group-name">${group.naam}</span><span class="group-summary"></span></summary>`;
+    set.addEventListener("toggle", rememberOpen);
     const reset = document.createElement("button");
     reset.type = "button";
     reset.className = "text-button";
@@ -155,12 +162,58 @@ function buildForm(state) {
         input.value = show(standard(entry.key));
         validate(input);
       }
-      remember(); drawExplainers();
+      remember(); drawExplainers(); summarise();
     });
-    set.append(reset);
-    for (const entry of group.velden) set.append(field(entry, state.aannames?.[entry.key] ?? standard(entry.key)));
+    const body = document.createElement("div");
+    body.className = "group-body";
+    body.append(reset);
+    for (const entry of group.velden) body.append(field(entry, state.aannames?.[entry.key] ?? standard(entry.key)));
+    set.append(body);
     return set;
   }));
+  summarise();
+}
+
+// Korte samenvatting per dichte categorie: de belangrijkste waarden en hoeveel er is aangepast.
+const SUMMARIES = {
+  "Installatie": v => [`${nf(v.capaciteit_mw, 0)} MW`],
+  "Rendement per module": v => [`minimumlast ${nf(v.minimumlast, 0)} %`, `${nf(v.systeemverbruik_vol)} kWh/kg`, `${nf(v.degradatie_1000h, 2)} %/1000 h`],
+  "Bedrijfsvoering": v => [`aan ≥ ${nf(v.min_aan_min, 0)} min`, `startvertraging ${nf(v.startvertraging_min, 0)} min`, `koude start ${nf(v.opstart_koud_min, 0)} min`],
+  "Beschikbaarheid": v => [`${nf(v.onderhoud_dagen, 0)} dagen onderhoud`, `${nf(v.storingen_per_jaar, 0)} storingen per jaar`],
+  "Slijtage": v => [`stack ${nf(v.stack_levensduur_uur, 0)} h`],
+  "Kosten": v => [`${nf(v.capex_eur_kw, 0)} €/kW`, `stroom ${nf(v.stroomprijs_eur_mwh + v.netkosten_eur_mwh + v.belasting_eur_mwh, 2)} €/MWh`, `rente ${nf(v.rente, 1)} %`],
+  "Subsidies en opbrengsten": v => {
+    const parts = [];
+    if (v.capex_subsidie_eur_kw) parts.push(`subsidie ${nf(v.capex_subsidie_eur_kw, 0)} €/kW`);
+    if (v.waterstofpremie_eur_kg) parts.push(`premie ${nf(v.waterstofpremie_eur_kg, 2)} €/kg`);
+    if (v.korting_net_belasting_eur_mwh) parts.push(`korting ${nf(v.korting_net_belasting_eur_mwh, 2)} €/MWh`);
+    if (v.zuurstofprijs_eur_t) parts.push(`zuurstof ${nf(v.zuurstofprijs_eur_t, 0)} €/t`);
+    return parts.length ? parts : ["geen"];
+  },
+};
+
+function summarise() {
+  const v = values();
+  for (const set of document.querySelectorAll("details.group")) {
+    const inputs = [...set.querySelectorAll(".field input")];
+    const changed = inputs.filter(i => i.classList.contains("changed")).length;
+    const bad = inputs.filter(i => i.getAttribute("aria-invalid") === "true").length;
+    const parts = (SUMMARIES[set.dataset.group] || (() => []))(v).filter(p => !p.includes("–"));
+    if (changed) parts.push(`${changed} aangepast`);
+    if (bad) parts.push(`${bad} ongeldig`);
+    set.querySelector(".group-summary").textContent = parts.join(" · ");
+    set.classList.toggle("has-changes", changed > 0);
+    set.classList.toggle("has-errors", bad > 0);
+  }
+}
+
+function loadOpen() {
+  try { return JSON.parse(localStorage.getItem(STORE + "-open")) || []; } catch { return []; }
+}
+
+function rememberOpen() {
+  const open = [...document.querySelectorAll("details.group[open]")].map(d => d.dataset.group);
+  try { localStorage.setItem(STORE + "-open", JSON.stringify(open)); } catch { /* opslag niet beschikbaar */ }
 }
 
 // ---------------------------------------------------------------- uitleg
@@ -367,7 +420,10 @@ function stepChart(rows) {
   $("step-chart").replaceChildren(f.svg);
 }
 
-function table(rows) {
+// Opbrengst per kilo (premie en zuurstof) uit de aannames van de uitkomst, in opgeslagen eenheden.
+const revenuePerKg = result => result.aannames.waterstofpremie_eur_kg + result.aannames.zuurstofprijs_eur_t * 8 / 1000;
+
+function table(rows, net) {
   const columns = [
     ["Modules", r => `${r.modules} × ${nf(r.module_mw)} MW`],
     ["Waterstof (t/jaar)", r => nf(r.waterstof_t, 0)],
@@ -381,6 +437,7 @@ function table(rows) {
     ["Stack (M€/jaar)", r => nf(r.stack_meur_jaar, 2)],
     ["Kosten (M€/jaar)", r => nf(r.kosten_meur_jaar, 2)],
     ["LCOH (€/kg)", r => nf(r.lcoh_eur_kg, 2)],
+    ...(net ? [["Netto (€/kg)", r => nf(r.netto_eur_kg, 2)]] : []),
   ];
   const best = rows.reduce((a, b) => (b.lcoh_eur_kg ?? Infinity) < (a.lcoh_eur_kg ?? Infinity) ? b : a);
   const head = `<caption class="note">Gemiddelden over de gekozen windjaren. De vetgedrukte rij heeft de laagste LCOH.</caption><thead><tr>${columns.map(c => `<th scope="col">${c[0]}</th>`).join("")}</tr></thead>`;
@@ -413,9 +470,15 @@ function render(result) {
   headline(rows, result);
   lineWithRange("h2-chart", rows, "waterstof_t", "ton", 0);
   capexChart(rows);
-  lineWithRange("lcoh-chart", rows, "lcoh_eur_kg", "€/kg", 2);
+  const net = revenuePerKg(result) > 0;
+  $("lcoh-title").textContent = net ? "Netto kosten per kilo" : "Kosten per kilo (LCOH)";
+  $("lcoh-note").textContent = net
+    ? `LCOH min premie en zuurstofverkoop (${nf(revenuePerKg(result), 2)} €/kg); de streep toont de spreiding tussen windjaren.`
+    : "Met de aangenomen CAPEX en schaalfactor; de streep toont de spreiding tussen windjaren.";
+  lineWithRange("lcoh-chart", rows, net ? "netto_eur_kg" : "lcoh_eur_kg", "€/kg", 2);
   stepChart(rows);
-  table(rows);
+  table(rows, net);
+  renderSpeed(result);
   const others = rows.slice(1).map(r => r.modules);
   $("day-panel").hidden = !others.length;
   if (others.length) {
@@ -430,6 +493,8 @@ function render(result) {
 }
 
 // ---------------------------------------------------------------- dag van dichtbij
+
+const day = {data: null, n: 0, v: null, index: 0, marker: null};
 
 function dayChart(data, n, v) {
   const one = data.configuraties[1] || data.configuraties["1"];
@@ -455,12 +520,21 @@ function dayChart(data, n, v) {
   svg.append(el("polyline", {points: stepLine(one.stappen, s => s.verbruik), fill: "none", stroke: COLORS.one, "stroke-width": 2, "stroke-linejoin": "round"}),
     el("polyline", {points: stepLine(many.stappen, s => s.verbruik), fill: "none", stroke: COLORS.many, "stroke-width": 2, "stroke-linejoin": "round"}));
   const cursor = el("line", {x1: 0, x2: 0, y1: T, y2: B, stroke: COLORS.ink, "stroke-width": 1, visibility: "hidden"});
+  // Gekozen moment voor het rekenvoorbeeld: band over de tien minuten plus stippen op beide lijnen.
+  const pick = el("g", {class: "pick"});
   const hit = el("rect", {x: L, y: T, width: W - L - R, height: B - T, class: "hit"});
-  hit.addEventListener("mousemove", event => {
+  const indexAt = event => {
     const box = hit.getBoundingClientRect();
     const t = start + (event.clientX - box.left) / box.width * span;
     const found = steps.findIndex(s => s.t + 600 > t);
-    const i = found < 0 ? steps.length - 1 : found;
+    return found < 0 ? steps.length - 1 : found;
+  };
+  let dragging = false;
+  hit.addEventListener("pointerdown", event => { dragging = true; hit.setPointerCapture(event.pointerId); selectStep(indexAt(event)); });
+  hit.addEventListener("pointerup", () => { dragging = false; });
+  hit.addEventListener("mousemove", event => {
+    const i = indexAt(event);
+    if (dragging) selectStep(i);
     const a = one.stappen[i], b = many.stappen[i];
     if (!a || !b) return;
     cursor.setAttribute("x1", px(a.t + 300)); cursor.setAttribute("x2", px(a.t + 300)); cursor.setAttribute("visibility", "visible");
@@ -471,8 +545,17 @@ function dayChart(data, n, v) {
       <div class="row">${swatch(COLORS.many)} ${n} modules: ${nf(b.verbruik)} MW, ${active(b)} aan${down(b) ? `, ${down(b)} in onderhoud of storing` : ""}</div>`);
   });
   hit.addEventListener("mouseleave", () => { hideTip(); cursor.setAttribute("visibility", "hidden"); });
-  svg.append(cursor, hit);
+  const dots = el("g", {class: "pick-dots"});
+  svg.insertBefore(pick, svg.querySelector("polyline"));
+  svg.append(dots, cursor, hit);
   $("day-chart").replaceChildren(svg);
+  day.marker = i => {
+    const a = one.stappen[i], b = many.stappen[i];
+    pick.replaceChildren(el("rect", {x: px(a.t), y: T, width: Math.max(2, px(a.t + 600) - px(a.t)), height: B - T, class: "pick-band"}));
+    dots.replaceChildren(
+      el("circle", {cx: px(a.t + 300), cy: py(a.verbruik), r: 5, fill: COLORS.one, stroke: "#fff", "stroke-width": 2}),
+      el("circle", {cx: px(b.t + 300), cy: py(b.verbruik), r: 5, fill: COLORS.many, stroke: "#fff", "stroke-width": 2}));
+  };
   $("day-legend").innerHTML = `<span><span class="key wash"></span> Windaanbod</span>
     <span>${swatch(COLORS.one)} Verbruik met 1 module</span><span>${swatch(COLORS.many)} Verbruik met ${n} modules</span>
     <span><span class="key dash"></span> Startdrempel: ${nf(big)} MW voor 1 module, ${nf(small)} MW per module bij ${n}</span>`;
@@ -498,6 +581,10 @@ async function runDay() {
   try {
     const data = await post("/api/opsplitsing/dag", {aannames: v, strategie: selection().strategie, datum: $("day").value, modules: [1, n]});
     dayChart(data, n, v);
+    Object.assign(day, {data, n, v});
+    const slider = $("step");
+    slider.max = String(data.wind.length - 1);
+    selectStep(interestingStep(data, n));
     $("day-status").textContent = "";
   } catch (error) {
     $("day-status").textContent = error.message;
@@ -516,6 +603,9 @@ async function submit(event) {
   if (bad.length) {
     status.textContent = `Controleer ${bad.length === 1 ? "het rood gemarkeerde veld" : bad.length + " rood gemarkeerde velden"}.`;
     status.classList.add("error");
+    // Een dichte categorie verbergt het rode veld; open die eerst.
+    for (const input of bad) input.closest("details.group").open = true;
+    summarise();
     bad[0].focus();
     return;
   }
@@ -554,6 +644,7 @@ async function start() {
   }
   buildForm(load());
   drawExplainers();
+  renderSpeed(null);
   $("form").addEventListener("submit", submit);
   $("form").addEventListener("change", remember);
   $("reset").addEventListener("click", () => {
@@ -562,8 +653,157 @@ async function start() {
     drawExplainers();
   });
   $("day-run").addEventListener("click", runDay);
+  $("step").addEventListener("input", event => selectStep(Number(event.target.value)));
   $("day-count").addEventListener("change", runDay);
   addEventListener("scroll", hideTip, {passive: true});
 }
 
 start();
+
+// ---------------------------------------------------------------- rekenvoorbeeld van één moment
+
+const clockOf = t => new Date(t * 1000).toLocaleTimeString("nl-NL", {hour: "2-digit", minute: "2-digit", timeZone: "Europe/Amsterdam"});
+const cfg = (data, n) => data.configuraties[n] || data.configuraties[String(n)];
+
+// Begin bij een moment waarop één module stilstaat en meerdere modules wel draaien: daar zit het verschil.
+function interestingStep(data, n) {
+  const one = cfg(data, 1).stappen, many = cfg(data, n).stappen;
+  const gaps = one.map((s, i) => ({i, gap: many[i].kg.reduce((a, b) => a + b, 0) - s.kg.reduce((a, b) => a + b, 0)}));
+  const off = gaps.filter(g => one[g.i].verbruik === 0 && g.gap > 0);
+  return (off.length ? off[Math.floor(off.length / 2)] : gaps.reduce((a, b) => b.gap > a.gap ? b : a)).i;
+}
+
+function selectStep(i) {
+  if (!day.data) return;
+  day.index = Math.max(0, Math.min(day.data.wind.length - 1, i));
+  $("step").value = String(day.index);
+  $("step-time").textContent = `${clockOf(cfg(day.data, 1).stappen[day.index].t)}–${clockOf(cfg(day.data, 1).stappen[day.index].t + 600)}`;
+  day.marker?.(day.index);
+  renderWalk();
+}
+
+function moduleBars(step, size, color) {
+  const n = step.stack.length, W = 260, gap = 4, w = Math.min(40, (W - gap * (n - 1)) / n), H = 46;
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H + 14}`, class: "module-bars", "aria-hidden": "true"});
+  step.stack.forEach((x, i) => {
+    const left = i * (w + gap), fill = x / size;
+    svg.append(el("rect", {x: left, y: 0, width: w, height: H, fill: step.uit[i] ? "#EFECE6" : "#fff", stroke: "#bcc8d2"}));
+    if (step.uit[i]) svg.append(el("line", {x1: left, y1: H, x2: left + w, y2: 0, stroke: COLORS.muted}));
+    if (fill > 0) svg.append(el("rect", {x: left + 1, y: H - fill * (H - 2) - 1, width: w - 2, height: fill * (H - 2), fill: color, "fill-opacity": step.opstart_min[i] ? .45 : 1}));
+    if (n <= 16) svg.append(text(left + w / 2, H + 12, step.uit[i] ? "uit" : nf(fill * 100, 0) + "%", {"text-anchor": "middle", "font-size": 9}));
+  });
+  return svg;
+}
+
+function windSpark(data, index) {
+  const W = 260, H = 70, T = 6, B = 62;
+  const series = Object.keys(data.stations);
+  const top = niceTop(Math.max(...data.wind.flatMap(w => series.map(p => w[p].v10)), 1));
+  const px = i => i / (data.wind.length - 1) * W, py = v => B - v / top * (B - T);
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, class: "spark", "aria-hidden": "true"});
+  svg.append(el("line", {x1: 0, x2: W, y1: B, y2: B, class: "axis"}));
+  series.forEach((park, k) => {
+    const color = k ? COLORS.many : COLORS.one;
+    svg.append(el("polyline", {points: data.wind.map((w, i) => `${px(i).toFixed(1)},${py(w[park].v10).toFixed(1)}`).join(" "), fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round"}),
+      el("circle", {cx: px(index), cy: py(data.wind[index][park].v10), r: 4.5, fill: color, stroke: "#fff", "stroke-width": 2}));
+  });
+  svg.append(el("line", {x1: px(index), x2: px(index), y1: T, y2: B, stroke: COLORS.ink, "stroke-width": 1}));
+  return svg;
+}
+
+function renderWalk() {
+  const {data, n, v, index} = day;
+  const wind = data.wind[index];
+  const one = cfg(data, 1), many = cfg(data, n);
+  const a = one.stappen[index], b = many.stappen[index];
+  const share = data.aandeel_fryslan;
+  const parks = Object.keys(data.stations);
+  const sumKg = s => s.kg.reduce((x, y) => x + y, 0);
+  const kWh = (x, size) => x > 0 ? (x * (1 + v.bop_variabel / 100) + v.bop_vast / 100 * size) * 1000 / 6 : 0;
+
+  const card = (letter, title, body) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="flow-n">${letter}</span><h4>${title}</h4>`;
+    for (const part of [].concat(body)) typeof part === "string" ? li.insertAdjacentHTML("beforeend", part) : li.append(part);
+    return li;
+  };
+  const windLine = park => {
+    const w = wind[park];
+    return `<p class="calc"><b>${data.parken[park]}</b><br>${nf(w.v10)} × (${w.ashoogte}/10)<sup>${nf(w.alpha, 3)}</sup> = <b>${nf(w.v_as)} m/s</b> op ${w.ashoogte} m<br>
+      − ${nf(w.zog * 100, 0)} % zog = ${nf(w.v_turbine)} m/s → ${nf(w.turbine_kw, 0)} kW per turbine<br>
+      × ${w.turbines} turbines = <b>${nf(w.mw)} MW</b></p>`;
+  };
+  const deploy = (config, step, color, count) => {
+    const size = config.module_mw;
+    const active = step.stack.filter(x => x > 0).length;
+    const reason = step.redenen.length ? `<br><span class="why">${step.redenen.join("; ")}</span>` : "";
+    const verdict = active ? `${active} van ${count} ${active === 1 ? "draait" : "draaien"} op ${nf(step.stack.find(x => x > 0) / size * 100, 0)} % last` : "Staat stil";
+    const box = document.createElement("div");
+    box.className = "deploy";
+    box.innerHTML = `<p class="calc"><b>${label(count)} van ${nf(size)} MW</b><br>Startdrempel ${nf(config.drempel_mw)} MW per module
+      (${nf(v.minimumlast, 0)} % last + BoP). Er passen er ${step.passen}; de besturing kiest ${step.gewenst}${step.gewenst < step.passen && selection().strategie === "verdelen" ? ", omdat dat de meeste waterstof geeft" : ""}. ${verdict}.${reason}</p>`;
+    box.append(moduleBars(step, size, color));
+    return box;
+  };
+  const produce = (config, step, count) => {
+    const size = config.module_mw;
+    const lines = step.stack.map((x, i) => ({x, kg: step.kg[i], start: step.opstart_min[i]})).filter(m => m.x > 0);
+    if (!lines.length) return `<p class="calc"><b>${label(count)}</b>: geen productie.</p>`;
+    const m = lines[0];
+    const spec = m.kg ? kWh(m.x, size) / m.kg : null;
+    const startNote = lines.some(l => l.start) ? ` Opstarten kost ${nf(Math.max(...lines.map(l => l.start)), 0)} min productie.` : "";
+    const many = lines.length > 1;
+    return `<p class="calc"><b>${label(count)}</b>${many ? `, per module` : ""}<br>${nf(m.x)} MW stack + BoP, 10 min = ${nf(kWh(m.x, size), 0)} kWh
+      ${spec ? `<br>÷ ${nf(spec, 1)} kWh/kg bij ${nf(m.x / size * 100, 0)} % last = <b>${nf(m.kg)} kg</b>` : "<br>Nog aan het opstarten: 0 kg"}${many ? `<br>× ${lines.length} modules = <b>${nf(sumKg(step))} kg</b>` : ""}.${startNote}</p>`;
+  };
+  const year = lastResult && (() => {
+    const rowOf = k => lastResult.rijen.find(r => r.modules === k);
+    const r1 = rowOf(1), rn = rowOf(n);
+    return r1 && rn ? `<p class="calc">Een jaar heeft ${nf(52560, 0)} van zulke stappen. Gemiddeld over de windjaren:
+      <b>${nf(r1.waterstof_t, 0)} t</b> met 1 module, <b>${nf(rn.waterstof_t, 0)} t</b> met ${n}. Kosten per kilo
+      ${nf(r1.lcoh_eur_kg, 2)} en ${nf(rn.lcoh_eur_kg, 2)} € (stap 3).</p>` : "";
+  })();
+
+  const legend = `<p class="legend small">${parks.map((p, k) => `<span>${swatch(k ? COLORS.many : COLORS.one)} ${data.stations[p]}</span>`).join("")}</p>`;
+  $("walk").replaceChildren(
+    card("A", "KNMI-wind op 10 m", [legend, windSpark(data, index),
+      `<p class="calc">${parks.map(p => `${data.stations[p]} <b>${nf(wind[p].v10)} m/s</b>`).join(" · ")}<br>Tienminutengemiddelde van het KNMI.</p>`]),
+    card("B", "Wind op ashoogte en parkvermogen", parks.map(windLine)),
+    card("C", "Aanbod voor de elektrolyser", `<p class="calc">${nf(share, 1)} × ${nf(wind.fryslan.mw)} + ${nf(wind.beabuorren.mw)}<br><b class="big">= ${nf(a.aanbod)} MW</b></p>
+      <p class="note">10 % van Windpark Fryslân plus heel Beabuorren, zoals op mijnwindpark.nl.</p>`),
+    card("D", "Modules inzetten", [deploy(one, a, COLORS.one, 1), deploy(many, b, COLORS.many, n)]),
+    card("E", "Waterstof in deze tien minuten", [produce(one, a, 1), produce(many, b, n)]),
+    card("F", "Optellen", `<p class="calc">Dit moment: <b>${nf(sumKg(a))} kg</b> met 1 module, <b>${nf(sumKg(b))} kg</b> met ${n}.</p>
+      <p class="calc">De hele dag, ${nf(data.wind.length, 0)} stappen: <b>${nf(one.waterstof_kg / 1000, 2)} t</b> en <b>${nf(many.waterstof_kg / 1000, 2)} t</b>.</p>${year}`),
+  );
+}
+
+// ---------------------------------------------------------------- hoe kan dit zo snel?
+
+function renderSpeed(result) {
+  const years = result ? result.jaren.length : selection().jaren.length || meta.jaren.length;
+  const counts = result ? result.rijen.map(r => r.modules) : (selection().modules.length ? selection().modules : meta.modules);
+  const steps = result?.omvang?.tijdstappen ?? years * 52560;
+  const modules = counts.reduce((a, b) => a + b, 0);
+  const total = steps * modules;
+  const cores = result?.omvang?.processen;
+  const timing = !result ? "Nog niet berekend."
+    : result.uit_cache ? `Laatste berekening: ${nf(result.rekentijd_s, 2)} s, uit de cache. De eerste keer kostte ${nf(result.eerste_rekentijd_s, 1)} s.`
+    : `Laatste berekening: ${nf(result.rekentijd_s, 1)} s, nieuw uitgerekend.`;
+  $("speed-body").innerHTML = `
+    <div class="sum">
+      <div><strong>${nf(years, 0)}</strong><span>windjaren</span></div><i>×</i>
+      <div><strong>${nf(steps / years, 0)}</strong><span>tijdstappen van 10 min per jaar, met meting</span></div><i>×</i>
+      <div><strong>${nf(modules, 0)}</strong><span>modules in ${counts.length} configuraties</span></div><i>=</i>
+      <div class="total"><strong>${nf(total / 1e6, 1)} mln</strong><span>keer: één module, één moment</span></div>
+    </div>
+    <p>Per module en per moment is het rekenwerk klein: aanbod verdelen, minimumlast controleren, kilo's uitrekenen en
+      slijtage optellen. Dat zijn een paar tientallen rekenstappen; een computer doet er honderden miljoenen per seconde.</p>
+    <ul class="reasons">
+      <li><b>Wind één keer ophalen.</b> Elk windjaar komt in één KNMI-aanvraag binnen en wordt als aanbod bewaard.</li>
+      <li><b>Keuzes onthouden.</b> Hoeveel modules het beste draaien bij een bepaald aanbod, wordt één keer uitgerekend en daarna opgezocht.</li>
+      <li><b>Werk verdelen.</b> Elke combinatie van windjaar en configuratie is een losse taak, verdeeld over ${cores ? cores : "alle"} processorkernen.</li>
+      <li><b>Uitkomsten bewaren.</b> Dezelfde aannames nog eens? Dan komt de uitkomst direct uit de cache.</li>
+    </ul>
+    <p class="note">${timing}</p>`;
+}
