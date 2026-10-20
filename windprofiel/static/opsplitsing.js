@@ -14,7 +14,7 @@ let meta = null;
 let tech = "pem";
 const standard = key => meta.technologieen[tech].waarden[key];
 const show = value => nf(value, decimals(value)).replace(/\s|\./g, "");
-const SOURCE_CLASS = {"EU LCOH-tool": "eu", "mijnwindpark.nl": "site", "plaatshouder": "placeholder"};
+const SOURCE_CLASS = {"EU LCOH-tool": "eu", "mijnwindpark.nl": "site", "eigen aanname": "own", "plaatshouder": "placeholder"};
 let lastResult = null;
 let running = false;
 
@@ -180,8 +180,8 @@ const SUMMARIES = {
   "Rendement per module": v => [`minimumlast ${nf(v.minimumlast, 0)} %`, `${nf(v.systeemverbruik_vol)} kWh/kg`, `${nf(v.degradatie_1000h, 2)} %/1000 h`],
   "Bedrijfsvoering": v => [`aan ≥ ${nf(v.min_aan_min, 0)} min`, `startvertraging ${nf(v.startvertraging_min, 0)} min`, `koude start ${nf(v.opstart_koud_min, 0)} min`],
   "Beschikbaarheid": v => [`${nf(v.onderhoud_dagen, 0)} dagen onderhoud`, `${nf(v.storingen_per_jaar, 0)} storingen per jaar`],
-  "Slijtage": v => [`stack ${nf(v.stack_levensduur_uur, 0)} h`],
-  "Kosten": v => [`${nf(v.capex_eur_kw, 0)} €/kW`, `stroom ${nf(v.stroomprijs_eur_mwh + v.netkosten_eur_mwh + v.belasting_eur_mwh, 2)} €/MWh`, `rente ${nf(v.rente, 1)} %`],
+  "Slijtage": v => [`stack ${nf(v.stack_levensduur_uur, 0)} h`, `wissel ${nf(v.stackwissel_weken, 0)} weken`],
+  "Kosten": v => [`offerte ${nf(v.offerte_meur, 0)} M€ voor ${nf(v.offerte_mw, 0)} MW`, `vast ${nf(v.vaste_kosten_module_meur, 2)} M€ per module`, `stroom ${nf(v.stroomprijs_eur_mwh + v.netkosten_eur_mwh + v.belasting_eur_mwh, 2)} €/MWh`, `rente ${nf(v.rente, 1)} %`],
   "Subsidies en opbrengsten": v => {
     const parts = [];
     if (v.capex_subsidie_eur_kw) parts.push(`subsidie ${nf(v.capex_subsidie_eur_kw, 0)} €/kW`);
@@ -375,28 +375,27 @@ function lineWithRange(target, rows, key, unit, digits) {
   $(target).replaceChildren(f.svg);
 }
 
-function capexChart(rows) {
-  const top = niceTop(Math.max(...rows.flatMap(r => [r.capex_meur, r.capex_break_even_meur])) * 1.05);
-  const f = frame(rows, top, {unit: "M€"});
-  const width = Math.min(22, (f.band - 14) / 2);
-  rows.forEach((row, i) => {
-    [[row.capex_meur, COLORS.one, -1], [row.capex_break_even_meur, COLORS.many, 1]].forEach(([value, color, side]) => {
-      const x = side < 0 ? f.cx(i) - width - 1 : f.cx(i) + 1;
-      const y = f.py(Math.max(0, value)), h = f.B - y;
-      const r = Math.min(4, h, width / 2);
-      f.svg.append(el("path", {d: `M${x},${f.B} V${y + r} Q${x},${y} ${x + r},${y} H${x + width - r} Q${x + width},${y} ${x + width},${y + r} V${f.B} Z`, fill: color}));
-    });
+function fixedCostChart(rows, assumed) {
+  const steps = rows.filter(r => r.vaste_kosten_break_even_meur != null);
+  if (!steps.length) { $("capex-chart").textContent = "Kies minstens twee moduleaantallen."; return; }
+  const top = niceTop(Math.max(...steps.map(r => r.vaste_kosten_break_even_meur), assumed) * 1.1);
+  const f = frame(steps, top, {unit: "M€ per module"});
+  const width = Math.min(24, f.band - 12);
+  steps.forEach((row, i) => {
+    const value = Math.max(0, row.vaste_kosten_break_even_meur);
+    const x = f.cx(i) - width / 2, y = f.py(value), h = f.B - y, r = Math.min(4, h, width / 2);
+    f.svg.append(el("path", {d: `M${x},${f.B} V${y + r} Q${x},${y} ${x + r},${y} H${x + width - r} Q${x + width},${y} ${x + width},${y + r} V${f.B} Z`,
+      fill: row.vaste_kosten_break_even_meur >= assumed ? COLORS.many : COLORS.one}));
+    f.svg.append(text(f.cx(i), y - 7, nf(row.vaste_kosten_break_even_meur, 2), {"text-anchor": "middle", class: "label"}));
   });
-  hover(f, rows, row => {
-    const room = row.capex_break_even_meur / row.capex_meur - 1;
-    return `<b>${label(row.modules)} van ${nf(row.module_mw)} MW</b>
-      <div class="row">${swatch(COLORS.one)} Aangenomen CAPEX ${nf(row.capex_meur)} M€</div>
-      <div class="row">${swatch(COLORS.many)} Maximaal ${nf(row.capex_break_even_meur)} M€</div>
-      ${room >= 0 ? "Ruimte " + nf(room * 100) + " %" : "Aanname ligt " + nf(-room * 100) + " % boven het maximum"}`;
-  });
+  f.svg.append(el("line", {x1: f.L, x2: f.W - f.R, y1: f.py(assumed), y2: f.py(assumed), stroke: COLORS.ink, "stroke-width": 1.5, "stroke-dasharray": "6 4"}),
+    text(f.W - f.R, f.py(assumed) - 6, `aangenomen ${nf(assumed, 2)} M€`, {"text-anchor": "end", class: "label"}));
+  hover(f, steps, row => `<b>${label(row.modules)} van ${nf(row.module_mw)} MW</b><br>Lonend tot ${nf(row.vaste_kosten_break_even_meur, 2)} M€ vaste kosten per module
+    <br>${row.vaste_kosten_break_even_meur >= assumed ? "Met de aanname goedkoper" : "Met de aanname duurder"} dan ${label(rows[0].modules)} per kilo
+    <br>CAPEX nu ${nf(row.capex_meur)} M€`);
   const legend = document.createElement("div");
   legend.className = "legend";
-  legend.innerHTML = `<span>${swatch(COLORS.one)} Aangenomen CAPEX</span><span>${swatch(COLORS.many)} Maximaal om ${label(rows[0].modules)} te verslaan</span>`;
+  legend.innerHTML = `<span>${swatch(COLORS.many)} Goedkoper dan ${label(rows[0].modules)}</span><span>${swatch(COLORS.one)} Duurder</span><span><span class="key dash"></span> Aangenomen vaste kosten</span>`;
   $("capex-chart").replaceChildren(legend, f.svg);
 }
 
@@ -433,6 +432,8 @@ function table(rows, net) {
     ["Stackwissel na (jaar)", r => nf(r.jaren_tot_stackwissel)],
     ["CAPEX (M€)", r => nf(r.capex_meur)],
     ["Maximale CAPEX (M€)", r => nf(r.capex_break_even_meur)],
+    ["Max. vaste kosten per module (M€)", r => r.vaste_kosten_break_even_meur == null ? "–" : nf(r.vaste_kosten_break_even_meur, 2)],
+    ["Stilstand stackwissel (d/jaar)", r => nf(r.stackwissel_dagen)],
     ["Stroom (M€/jaar)", r => nf(r.stroom_meur_jaar, 2)],
     ["Stack (M€/jaar)", r => nf(r.stack_meur_jaar, 2)],
     ["Kosten (M€/jaar)", r => nf(r.kosten_meur_jaar, 2)],
@@ -454,11 +455,11 @@ function headline(rows, result) {
     knee = rows[i];
   }
   const gain = knee.waterstof_t / base.waterstof_t - 1;
-  const room = knee.capex_break_even_meur / base.capex_meur - 1;
   $("headline").innerHTML = `
     <div><span>Knikpunt</span><strong>${label(knee.modules)}</strong><p>Daarna levert een extra module minder dan 1 % waterstof op.</p></div>
     <div><span>Meer waterstof</span><strong>${pct(gain)}</strong><p>${label(knee.modules)} ten opzichte van ${label(base.modules)}: ${nf(knee.waterstof_t - base.waterstof_t, 0)} ton per jaar.</p></div>
-    <div><span>Mag duurder zijn</span><strong>${pct(room)}</strong><p>Hoogste CAPEX voor ${label(knee.modules)} waarbij de kilo niet duurder wordt dan met ${label(base.modules)}: ${nf(knee.capex_break_even_meur)} M€.</p></div>`;
+    <div><span>Vaste kosten per module</span><strong>${knee.vaste_kosten_break_even_meur == null ? "–" : "≤ " + nf(knee.vaste_kosten_break_even_meur, 2) + " M€"}</strong>
+      <p>${label(knee.modules)} ${knee.vaste_kosten_break_even_meur == null ? "is de vergelijkingsbasis" : `is per kilo goedkoper dan ${label(base.modules)} zolang een module hooguit dit aan vaste kosten heeft`}. Nu aangenomen: ${nf(result.aannames.vaste_kosten_module_meur, 2)} M€.</p></div>`;
   const years = result.jaren.join(", ");
   $("result-sub").textContent = `Besturing ‘${result.strategie}’, windjaren ${years}. Aanbod gemiddeld ${nf(Object.values(result.aanbod).reduce((s, a) => s + a.mwh, 0) / result.jaren.length / 1000, 0)} GWh per jaar.`;
 }
@@ -469,12 +470,12 @@ function render(result) {
   $("results").hidden = false;
   headline(rows, result);
   lineWithRange("h2-chart", rows, "waterstof_t", "ton", 0);
-  capexChart(rows);
+  fixedCostChart(rows, result.aannames.vaste_kosten_module_meur);
   const net = revenuePerKg(result) > 0;
   $("lcoh-title").textContent = net ? "Netto kosten per kilo" : "Kosten per kilo (LCOH)";
   $("lcoh-note").textContent = net
     ? `LCOH min premie en zuurstofverkoop (${nf(revenuePerKg(result), 2)} €/kg); de streep toont de spreiding tussen windjaren.`
-    : "Met de aangenomen CAPEX en schaalfactor; de streep toont de spreiding tussen windjaren.";
+    : "Met de CAPEX uit de referentieofferte en de vaste kosten per module; de streep toont de spreiding tussen windjaren.";
   lineWithRange("lcoh-chart", rows, net ? "netto_eur_kg" : "lcoh_eur_kg", "€/kg", 2);
   stepChart(rows);
   table(rows, net);

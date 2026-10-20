@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 from windprofiel.application import load_curve
 
 from windprofiel.opsplitsing import (AANNAMES_META, TECHNOLOGIES, Aannames, break_even, combine_wind, desired_count, draw_mw, economics,
-                                     park_mw, parse_aannames, power_price, simulate, stack_kg_h, summarise, wind_steps)
+                                     capex_eur, park_mw, parse_aannames, per_kw_eur, power_price, simulate, simulate_with_replacements,
+                                     stack_kg_h, summarise, wind_steps)
 
 STILL = Aannames(onderhoud_dagen=0, storingen_per_jaar=0, startvertraging_min=0, min_aan_min=0, min_uit_min=0)
 
@@ -27,7 +28,6 @@ class OpsplitsingTests(unittest.TestCase):
         for name, a in TECHNOLOGIES.values():
             fresh = replace(a, degradatie_1000h=0)
             self.assertAlmostEqual(draw_mw(44, 44, fresh) * 1000 / stack_kg_h(44, 44, fresh), a.systeemverbruik_vol, msg=name)
-        self.assertEqual(TECHNOLOGIES["alkaline"][1].capex_eur_kw, 2075)
         self.assertAlmostEqual(power_price(Aannames()), 110.91)
 
     def test_dispatch_respects_minimum_and_capacity(self):
@@ -75,7 +75,7 @@ class OpsplitsingTests(unittest.TestCase):
         flat = supply([30.0] * 600)
         rows = [summarise([simulate(flat, n, a, "verdelen")], a) for n in (1, 8)]
         break_even(rows, a)
-        self.assertGreater(rows[1]["capex_meur"], a.capex_eur_kw * 44 / 1000)   # kleinere modules duurder per kW
+        self.assertAlmostEqual(rows[1]["capex_meur"] - rows[0]["capex_meur"], 7 * a.vaste_kosten_module_meur)
         self.assertAlmostEqual(rows[0]["capex_break_even_meur"], rows[0]["capex_meur"])
         self.assertGreater(economics(rows[0], a)["lcoh_eur_kg"], 0)
 
@@ -89,14 +89,30 @@ class OpsplitsingTests(unittest.TestCase):
         self.assertAlmostEqual(row["lcoh_eur_kg"] - row["netto_eur_kg"], 1 + 50 * 8 / 1000)
         self.assertEqual(power_price(replace(STILL, korting_net_belasting_eur_mwh=200)), STILL.stroomprijs_eur_mwh)
 
-    def test_break_even_with_capex_subsidy_reproduces_single_module_cost(self):
+    def test_quote_sets_price_per_kw_and_fixed_cost_per_module(self):
+        a = Aannames()   # 60 M€ voor 50 MW in 10 units, 1 M€ vast per unit
+        self.assertAlmostEqual(per_kw_eur(a), 1000)
+        self.assertAlmostEqual(capex_eur(replace(a, capaciteit_mw=50), 10), 60e6)
+        self.assertAlmostEqual(capex_eur(a, 1), 45e6)
+        self.assertAlmostEqual(capex_eur(a, 10), 54e6)
+        with self.assertRaises(ValueError):
+            parse_aannames({"vaste_kosten_module_meur": 6})   # 10 × 6 M€ laat niets over voor de prijs per kW
+
+    def test_fixed_cost_break_even_reproduces_single_module_cost(self):
         helped = replace(STILL, capex_subsidie_eur_kw=500)
-        flat = supply([30.0] * 600)
+        flat = supply([3.0] * 300 + [30.0] * 300)
         rows = [summarise([simulate(flat, n, helped, "verdelen")], helped) for n in (1, 4)]
         break_even(rows, helped)
-        priced = replace(helped, capex_eur_kw=helped.capex_eur_kw * rows[1]["capex_break_even_meur"] / rows[1]["capex_meur"])
-        again = summarise([simulate(flat, 4, priced, "verdelen")], priced)
-        self.assertAlmostEqual(again["lcoh_eur_kg"], rows[0]["lcoh_eur_kg"], places=6)
+        limit = rows[1]["vaste_kosten_break_even_meur"]
+        self.assertIsNone(rows[0]["vaste_kosten_break_even_meur"])
+        priced = replace(helped, vaste_kosten_module_meur=limit)
+        self.assertAlmostEqual(economics(rows[1], priced)["lcoh_eur_kg"], economics(rows[0], priced)["lcoh_eur_kg"], places=6)
+
+    def test_stack_replacement_adds_downtime_from_wear(self):
+        a = replace(STILL, stackwissel_weken=4, stack_levensduur_uur=10000)
+        result = simulate_with_replacements(supply([48.4] * 600), 1, a, "verdelen")
+        first = simulate(supply([48.4] * 600), 1, a, "verdelen")
+        self.assertAlmostEqual(result["stackwissel_dagen"], 28 * first["eq_uren_per_module"][0] / 10000)
 
     def test_trace_parts_add_up(self):
         quick = replace(STILL, opstart_warm_min=0, opstart_koud_min=0)

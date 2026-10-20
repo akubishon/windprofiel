@@ -32,7 +32,7 @@ from zoneinfo import ZoneInfo
 from .application import PARKS, ROOT, load_curve, park_power_mw, parse_wind, shear_exponent
 from .knmi import KNMIClient, KNMIError, load_env_file
 
-MODEL_VERSION = 7   # verhogen bij elke rekenwijziging; maakt oude uitkomsten in de cache ongeldig
+MODEL_VERSION = 8   # verhogen bij elke rekenwijziging; maakt oude uitkomsten in de cache ongeldig
 STEP_H = 1 / 6
 FRYSLAN_SHARE = 0.10
 CACHE = ROOT / ".cache" / "opsplitsing"
@@ -42,7 +42,7 @@ FIRST_YEAR = 2022   # eerste volledige jaar met Windpark Fryslân in bedrijf
 # weinig terwijl Houtribdijk wel wind ziet, dan past de hoogste lijn beter bij de productie van Fryslân.
 # Wynpark Beabuorren houdt alleen Stavoren, het dichtstbijzijnde station.
 STATIONS = {"houtribdijk": ("Houtribdijk", "0-20000-0-06258"), "stavoren": ("Stavoren", "0-20000-0-06267")}
-MODULE_COUNTS = [1, 2, 3, 4, 6, 8, 11, 16]
+MODULE_COUNTS = [1, 2, 3, 4, 6, 8, 10, 11, 16]
 STRATEGIES = {
     "verdelen": "Per tijdstap het aantal modules dat de meeste waterstof geeft, last gelijk verdeeld.",
     "bijschakelen": "Modules één voor één bijschakelen; hooguit één module in deellast.",
@@ -75,9 +75,11 @@ class Aannames:
     eq_uur_koude_start: float = 5.0
     eq_uur_per_lastcyclus: float = 0.0
     stack_levensduur_uur: float = 60000.0
-    capex_eur_kw: float = 2196.0
-    capex_ref_mw: float = 44.0
-    capex_schaal: float = 0.85
+    stackwissel_weken: float = 4.0
+    offerte_meur: float = 60.0
+    offerte_mw: float = 50.0
+    offerte_modules: float = 10.0
+    vaste_kosten_module_meur: float = 1.0
     stack_aandeel: float = 0.14
     opex_aandeel: float = 0.02
     stroomprijs_eur_mwh: float = 88.91
@@ -97,17 +99,19 @@ TECHNOLOGIES = {
     "pem": ("PEM", Aannames()),
     "alkaline": ("Alkaline", replace(Aannames(), minimumlast=0.20, systeemverbruik_vol=52.4, degradatie_1000h=0.0012,
                                      koud_na_uur=4.0, opstart_warm_min=5.0, opstart_koud_min=45.0,
-                                     stack_levensduur_uur=80000.0, capex_eur_kw=2075.0)),
+                                     stack_levensduur_uur=80000.0)),
 }
-EU_TOOL = {"systeemverbruik_vol", "degradatie_1000h", "stack_levensduur_uur", "capex_eur_kw", "stack_aandeel",
+EU_TOOL = {"systeemverbruik_vol", "degradatie_1000h", "stack_levensduur_uur", "stack_aandeel",
            "opex_aandeel", "stroomprijs_eur_mwh", "netkosten_eur_mwh", "belasting_eur_mwh", "rente", "looptijd_jaar",
            "capex_subsidie_eur_kw", "waterstofpremie_eur_kg", "korting_net_belasting_eur_mwh", "zuurstofprijs_eur_t"}
 OXYGEN_KG_PER_KG = 8.0   # 2 H2O → 2 H2 + O2: 32 / 4
 WEBSITE = {"capaciteit_mw", "bop_vast", "bop_variabel"}
+OWN = {"offerte_meur", "offerte_mw", "offerte_modules"}
 
 
 def source(key: str) -> str:
-    return "EU LCOH-tool" if key in EU_TOOL else "mijnwindpark.nl" if key in WEBSITE else "plaatshouder"
+    return ("EU LCOH-tool" if key in EU_TOOL else "mijnwindpark.nl" if key in WEBSITE
+            else "eigen aanname" if key in OWN else "plaatshouder")
 
 
 # Uitleg, eenheid en grenzen per aanname; de webpagina bouwt haar formulier hieruit.
@@ -155,14 +159,17 @@ AANNAMES_META = [
         ("eq_uur_per_lastcyclus", "Slijtage per volledige lastzwaai", "equivalente uren", 0, 20, 1,
          "Per 0 → 100 → 0 %-zwaai; kleinere wisselingen tellen naar verhouding."),
         ("stack_levensduur_uur", "Stacklevensduur", "equivalente uren", 10000, 200000, 1, "Daarna wordt de stack vervangen."),
+        ("stackwissel_weken", "Stilstand per stackwissel", "weken", 0, 26, 1,
+         "Zolang staat een module stil bij vervanging. Verdeeld over het stackleven en gepland in het windarme voorjaar."),
     ]),
     ("Kosten", [
-        ("capex_eur_kw", "CAPEX bij referentiegrootte", "€/kW", 200, 6000, 1,
-         "Systeemprijs per kW. De EU-tool rekent met 100 MW; hier geldt de prijs voor één module van de referentiegrootte."),
-        ("capex_ref_mw", "Referentiegrootte", "MW", 0.5, 200, 1,
-         "Modulegrootte waarvoor de CAPEX hierboven geldt. Standaard de hele 44 MW, dus één module kost precies die prijs."),
-        ("capex_schaal", "Schaalfactor", "", 0.5, 1.0, 1,
-         "Modulekosten ∝ grootte^factor. Onder 1 zijn kleine modules duurder per kW. De belangrijkste onbekende; offertes geven het echte getal."),
+        ("offerte_meur", "Referentieofferte: prijs", "M€", 1, 2000, 1,
+         "Totaalprijs van een bekende installatie. Standaard 60 M€ voor 50 MW in 10 units van 5 MW."),
+        ("offerte_mw", "Referentieofferte: vermogen", "MW", 1, 500, 1, ""),
+        ("offerte_modules", "Referentieofferte: aantal units", "", 1, 100, 1, ""),
+        ("vaste_kosten_module_meur", "Vaste kosten per module", "M€", 0, 50, 1,
+         "Gelijkrichter, transformator, besturing en leidingwerk per unit, los van de grootte. De rest van de offerte wordt een prijs "
+         "per kW. Onzeker; de uitkomst toont bij welke waarde meer modules nog lonen."),
         ("stack_aandeel", "Stackvervanging", "% van module-CAPEX", 0, 100, 100, ""),
         ("opex_aandeel", "Vaste OPEX", "% van CAPEX per jaar", 0, 10, 100, ""),
         ("stroomprijs_eur_mwh", "Stroomprijs", "€/MWh", 0, 300, 1, "Voor alle verbruikte stroom, ook warmhouden."),
@@ -182,6 +189,16 @@ AANNAMES_META = [
 ]
 
 
+def per_kw_eur(a: Aannames) -> float:
+    """Prijs per kW uit de referentieofferte, na aftrek van de vaste kosten per unit."""
+    return (a.offerte_meur - a.offerte_modules * a.vaste_kosten_module_meur) * 1e6 / (a.offerte_mw * 1000)
+
+
+def capex_eur(a: Aannames, n: int) -> float:
+    """CAPEX = prijs per kW × vermogen + vaste kosten × aantal modules."""
+    return per_kw_eur(a) * a.capaciteit_mw * 1000 + n * a.vaste_kosten_module_meur * 1e6
+
+
 def parse_aannames(data: dict) -> Aannames:
     """Valideer opgestuurde aannames in getoonde eenheden tegen de grenzen uit AANNAMES_META."""
     values = {}
@@ -193,7 +210,10 @@ def parse_aannames(data: dict) -> Aannames:
             if not isinstance(value, (int, float)) or isinstance(value, bool) or not low <= value <= high:
                 raise ValueError(f"{label}: kies een waarde van {low} tot {high}.")
             values[key] = value / scale
-    return replace(Aannames(), **values)
+    a = replace(Aannames(), **values)
+    if per_kw_eur(a) <= 0:
+        raise ValueError("Vaste kosten per module × aantal units moeten onder de prijs van de referentieofferte blijven.")
+    return a
 
 
 def shown(a: Aannames) -> dict:
@@ -495,9 +515,9 @@ def crf(a: Aannames) -> float:
 
 
 def economics(result: dict, a: Aannames) -> dict:
-    n, size = result["modules"], result["module_mw"]
-    module_capex = a.capex_eur_kw * a.capex_ref_mw * 1000 * (size / a.capex_ref_mw) ** a.capex_schaal
-    capex = n * module_capex
+    n = result["modules"]
+    capex = capex_eur(a, n)
+    module_capex = capex / n
     # Continue benadering: elk equivalent bedrijfsuur verbruikt een deel van een stack.
     stack = sum(a.stack_aandeel * module_capex * e / a.stack_levensduur_uur for e in result["eq_uren_per_module"])
     power = (result["verbruik_mwh"] + result["standby_mwh"]) * power_price(a)
@@ -509,7 +529,8 @@ def economics(result: dict, a: Aannames) -> dict:
             "kapitaal_meur_jaar": ((capex - subsidy_eur(a)) * crf(a) + a.opex_aandeel * capex) / 1e6,
             "lcoh_eur_kg": annual / kg if kg else None,
             "netto_eur_kg": annual / kg - revenue_eur_kg(a) if kg else None,
-            "jaren_tot_stackwissel": a.stack_levensduur_uur / max(wear) if wear else None}
+            "jaren_tot_stackwissel": a.stack_levensduur_uur / max(wear) if wear else None,
+            "prijs_per_kw": per_kw_eur(a)}
 
 
 def summarise(per_year: list[dict], a: Aannames) -> dict:
@@ -541,15 +562,45 @@ def break_even(rows: list[dict], a: Aannames) -> None:
         # Bruto CAPEX; de subsidie is per kW en dus voor elke configuratie even groot.
         row["capex_break_even_meur"] = ((target - power + subsidy_eur(a) * crf(a))
                                         / (crf(a) + a.opex_aandeel + a.stack_aandeel * wear) / 1e6)
+        row["vaste_kosten_break_even_meur"] = fixed_cost_break_even(single, row, a)
         if previous:
             row["extra_waterstof_t"] = row["waterstof_t"] - previous["waterstof_t"]
             row["extra_kosten_meur_jaar"] = row["kosten_meur_jaar"] - previous["kosten_meur_jaar"]
         previous = row
 
 
+def fixed_cost_break_even(single: dict, row: dict, a: Aannames) -> float | None:
+    """Vaste kosten per module (M€) waarbij deze configuratie even duur per kilo is als de eerste.
+
+    De kosten per kilo zijn lineair in de vaste kosten; twee punten geven het snijpunt.
+    """
+    if row is single:
+        return None
+    gap = lambda f: (economics(row, replace(a, vaste_kosten_module_meur=f))["lcoh_eur_kg"]
+                     - economics(single, replace(a, vaste_kosten_module_meur=f))["lcoh_eur_kg"])
+    slope = gap(1.0) - gap(0.0)
+    return -gap(0.0) / slope if slope > 1e-12 else None
+
+
+def replacement_days(result: dict, a: Aannames) -> float:
+    """Gemiddelde stilstand per module per jaar door stackwissels, uit de gemeten slijtage."""
+    wear = sum(result["eq_uren_per_module"]) / result["modules"]
+    return a.stackwissel_weken * 7 * wear / a.stack_levensduur_uur
+
+
+def simulate_with_replacements(supply: dict, n: int, a: Aannames, strategy: str, trace: range | None = None) -> dict:
+    """Eerst de slijtage meten, dan opnieuw rekenen met de bijbehorende stilstand voor stackwissels."""
+    first = simulate(supply, n, a, strategy)
+    days = replacement_days(first, a) if a.stackwissel_weken else 0.0
+    if not days and trace is None:
+        return {**first, "stackwissel_dagen": 0.0}
+    result = simulate(supply, n, replace(a, onderhoud_dagen=a.onderhoud_dagen + days), strategy, trace)
+    return {**result, "stackwissel_dagen": days}
+
+
 def _job(args):
     supply, n, a, strategy = args
-    return simulate(supply, n, a, strategy)
+    return simulate_with_replacements(supply, n, a, strategy)
 
 
 def run(a: Aannames, years: list[int], counts: list[int], strategy: str, workers: int | None = None) -> dict:
@@ -618,7 +669,9 @@ def day_trace(a: Aannames, day: date, counts: list[int], strategy: str) -> dict:
     visible = range(next(i for i, t in enumerate(window["t"]) if t >= first), len(picked))
     out = {}
     for n in sorted(set(counts)):
-        result = simulate(window, n, a, strategy, trace=visible)
+        # Stilstand voor stackwissels volgt uit de slijtage over het hele jaar, niet uit dit venster.
+        extra = replacement_days(simulate(supply, n, a, strategy), a) if a.stackwissel_weken else 0.0
+        result = simulate(window, n, replace(a, onderhoud_dagen=a.onderhoud_dagen + extra), strategy, trace=visible)
         out[n] = {"module_mw": result["module_mw"], "stappen": result["stappen"],
                   "waterstof_kg": result["dagen"].get(day.isoformat(), [0])[0],
                   "drempel_mw": draw_mw(a.minimumlast * result["module_mw"], result["module_mw"], a)}
@@ -634,7 +687,7 @@ def day_trace(a: Aannames, day: date, counts: list[int], strategy: str) -> dict:
 
 CSV_FIELDS = ["scenario", "strategie", "modules", "module_mw", "waterstof_t", "benutting", "bedrijfsuren_gem",
               "starts_warm_per_module", "starts_koud_per_module", "jaren_tot_stackwissel", "capex_meur",
-              "stack_meur_jaar", "kosten_meur_jaar", "lcoh_eur_kg", "netto_eur_kg", "capex_break_even_meur", "extra_waterstof_t",
+              "stack_meur_jaar", "kosten_meur_jaar", "lcoh_eur_kg", "netto_eur_kg", "capex_break_even_meur", "vaste_kosten_break_even_meur", "extra_waterstof_t",
               "extra_kosten_meur_jaar"]
 
 
@@ -658,8 +711,10 @@ def main() -> int:
     scenarios = {"basis": ({}, list(STRATEGIES)),
                  "minimumlast 10 %": ({"minimumlast": 0.10}, ["verdelen"]),
                  "minimumlast 40 %": ({"minimumlast": 0.40}, ["verdelen"]),
-                 "CAPEX -25 %": ({"capex_eur_kw": base.capex_eur_kw * 0.75}, ["verdelen"]),
-                 "CAPEX +25 %": ({"capex_eur_kw": base.capex_eur_kw * 1.25}, ["verdelen"])}
+                 "offerte -25 %": ({"offerte_meur": base.offerte_meur * 0.75}, ["verdelen"]),
+                 "offerte +25 %": ({"offerte_meur": base.offerte_meur * 1.25}, ["verdelen"]),
+                 "vaste kosten 0,5 M€": ({"vaste_kosten_module_meur": 0.5}, ["verdelen"]),
+                 "vaste kosten 2 M€": ({"vaste_kosten_module_meur": 2.0}, ["verdelen"])}
     scenarios.update({f"windjaar {y}": ({}, ["verdelen"]) for y in args.jaren})
     rows = []
     for name, (changes, strategies) in scenarios.items():
