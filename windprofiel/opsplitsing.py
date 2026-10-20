@@ -1,0 +1,541 @@
+"""Elektrolyser opsplitsen in modules: simulatie op het eigen windprofiel.
+
+Vraag: levert een 44 MW-elektrolyser in N modules meer waterstof en een lagere
+LCOH op dan in minder, grotere modules? De voeding is hetzelfde aandeel als op
+mijnwindpark.nl: 10 % van Windpark Fryslân plus Wynpark Beabuorren, uit
+KNMI-tienminutenwaarden met het rekenmodel van deze app.
+
+Alle elektrolyser- en kostengetallen in `Aannames` zijn plaatshouders, geen
+leveranciers- of literatuurwaarden. Vervang ze door datasheets en offertes;
+pas dan zegt de uitkomst iets over jouw installatie.
+
+Windaanbod per jaar en uitkomsten per set aannames worden in `.cache/opsplitsing`
+bewaard, zodat KNMI alleen de eerste keer wordt bevraagd.
+"""
+
+import argparse
+import csv
+import hashlib
+import json
+import random
+from concurrent.futures import ProcessPoolExecutor
+from dataclasses import asdict, dataclass, fields, replace
+from datetime import date, datetime, timedelta, timezone
+from math import floor
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from .application import PARKS, ROOT, load_curve, park_power_mw, parse_wind, shear_exponent
+from .knmi import KNMIClient, KNMIError, load_env_file
+
+MODEL_VERSION = 4   # verhogen bij elke rekenwijziging; maakt oude uitkomsten in de cache ongeldig
+STEP_H = 1 / 6
+FRYSLAN_SHARE = 0.10
+CACHE = ROOT / ".cache" / "opsplitsing"
+LOCAL = ZoneInfo("Europe/Amsterdam")
+FIRST_YEAR = 2022   # eerste volledige jaar met Windpark Fryslân in bedrijf
+MODULE_COUNTS = [1, 2, 3, 4, 6, 8, 11, 16]
+STRATEGIES = {
+    "verdelen": "Per tijdstap het aantal modules dat de meeste waterstof geeft, last gelijk verdeeld.",
+    "bijschakelen": "Modules één voor één bijschakelen; hooguit één module in deellast.",
+    "samen": "Alle modules tegelijk aan of uit, alsof het één grote installatie is.",
+}
+
+
+@dataclass(frozen=True)
+class Aannames:
+    capaciteit_mw: float = 44.0
+    minimumlast: float = 0.20
+    sec_laag: float = 45.0
+    sec_vol: float = 50.0
+    faradayverlies_10: float = 0.03
+    bop_vast: float = 0.03
+    bop_variabel: float = 0.07
+    rendementsverlies_eind: float = 0.10
+    min_aan_min: float = 30.0
+    min_uit_min: float = 20.0
+    startvertraging_min: float = 20.0
+    standby: float = 0.01
+    koud_na_uur: float = 4.0
+    opstart_warm_min: float = 5.0
+    opstart_koud_min: float = 45.0
+    onderhoud_dagen: float = 7.0
+    storingen_per_jaar: float = 2.0
+    hersteltijd_uur: float = 48.0
+    eq_uur_warme_start: float = 1.0
+    eq_uur_koude_start: float = 5.0
+    eq_uur_per_lastcyclus: float = 0.0
+    stack_levensduur_uur: float = 60000.0
+    capex_eur_kw: float = 2000.0
+    capex_ref_mw: float = 11.0
+    capex_schaal: float = 0.85
+    stack_aandeel: float = 0.35
+    opex_aandeel: float = 0.02
+    stroomprijs_eur_mwh: float = 50.0
+    rente: float = 0.07
+    looptijd_jaar: float = 20.0
+
+
+# Uitleg, eenheid en grenzen per aanname; de webpagina bouwt haar formulier hieruit.
+# "schaal" zet de opgeslagen waarde om naar de getoonde (0,2 → 20 %).
+AANNAMES_META = [
+    ("Installatie", [
+        ("capaciteit_mw", "Totaal stackvermogen", "MW", 1, 200, 1,
+         "Opgesplitst over N gelijke modules. 44 MW past bij het gezamenlijke maximum na BoP op mijnwindpark.nl."),
+    ]),
+    ("Rendement per module", [
+        ("minimumlast", "Minimumlast", "%", 0, 80, 100,
+         "Onder deze last mag een module niet draaien. Grootste factor voor de winst van opsplitsen; staat in de datasheet."),
+        ("sec_laag", "Stackverbruik bij lage last", "kWh/kg", 30, 80, 1,
+         "Specifiek verbruik van de stack vlak boven nul last. Stacks zijn in deellast zuiniger door lagere celspanning."),
+        ("sec_vol", "Stackverbruik bij vollast", "kWh/kg", 30, 80, 1, "Specifiek verbruik van de stack op nominaal vermogen."),
+        ("faradayverlies_10", "Faradayverlies bij 10 % last", "%", 0, 20, 100,
+         "Gasdoorlek kost bij lage last relatief veel waterstof; het verlies schaalt met 1 / last."),
+        ("bop_vast", "BoP-vast", "% van module", 0, 20, 100,
+         "Pompen, koeling en besturing die draaien zodra de module aan staat, los van de last."),
+        ("bop_variabel", "BoP-variabel", "% van stack", 0, 30, 100,
+         "Gelijkrichter- en compressieverlies, evenredig met het stackvermogen. Vast + variabel is 10 % op vollast, net als op mijnwindpark.nl."),
+        ("rendementsverlies_eind", "Extra verbruik aan einde stackleven", "%", 0, 30, 100,
+         "Stacks verbruiken meer naarmate ze verouderen; gemiddeld over het leven telt de helft mee."),
+    ]),
+    ("Bedrijfsvoering", [
+        ("min_aan_min", "Minimale aan-tijd", "min", 0, 240, 1, "Een gestarte module blijft minstens zo lang draaien als er genoeg wind is."),
+        ("min_uit_min", "Minimale uit-tijd", "min", 0, 240, 1, "Een gestopte module mag pas na deze tijd opnieuw starten."),
+        ("startvertraging_min", "Startvertraging", "min", 0, 240, 1,
+         "Een extra module start pas als er al zo lang genoeg wind voor is. Voorkomt starts op korte windvlagen."),
+        ("standby", "Warmhouden", "% van module", 0, 10, 100, "Verbruik van een gestopte module zolang ze warm blijft."),
+        ("koud_na_uur", "Koud na", "uur", 0, 48, 1, "Na zoveel uur stilstand is een start een koude start."),
+        ("opstart_warm_min", "Opstarttijd warm", "min", 0, 120, 1, "Tijd zonder productie na een warme start."),
+        ("opstart_koud_min", "Opstarttijd koud", "min", 0, 240, 1, "Tijd zonder productie na een koude start."),
+    ]),
+    ("Beschikbaarheid", [
+        ("onderhoud_dagen", "Gepland onderhoud", "dagen per module per jaar", 0, 60, 1,
+         "Modules gaan na elkaar in onderhoud, in het windarme voorjaar en de zomer."),
+        ("storingen_per_jaar", "Storingen", "per module per jaar", 0, 20, 1, "Willekeurig maar herhaalbaar verdeeld over het jaar."),
+        ("hersteltijd_uur", "Hersteltijd per storing", "uur", 0, 720, 1, "Zolang ligt een module stil na een storing."),
+    ]),
+    ("Slijtage", [
+        ("eq_uur_warme_start", "Slijtage per warme start", "equivalente uren", 0, 50, 1, "Extra veroudering per start, uitgedrukt in bedrijfsuren."),
+        ("eq_uur_koude_start", "Slijtage per koude start", "equivalente uren", 0, 200, 1, ""),
+        ("eq_uur_per_lastcyclus", "Slijtage per volledige lastzwaai", "equivalente uren", 0, 20, 1,
+         "Per 0 → 100 → 0 %-zwaai; kleinere wisselingen tellen naar verhouding."),
+        ("stack_levensduur_uur", "Stacklevensduur", "equivalente uren", 10000, 200000, 1, "Daarna wordt de stack vervangen."),
+    ]),
+    ("Kosten", [
+        ("capex_eur_kw", "CAPEX bij referentiemodule", "€/kW", 200, 6000, 1, "Systeemprijs per kW voor een module van de referentiegrootte. Vervang door offertes."),
+        ("capex_ref_mw", "Referentiemodule", "MW", 0.5, 100, 1, "De modulegrootte waarvoor de CAPEX hierboven geldt."),
+        ("capex_schaal", "Schaalfactor", "", 0.5, 1.0, 1,
+         "Modulekosten ∝ grootte^factor. Onder 1 zijn kleine modules duurder per kW. De belangrijkste onbekende; offertes geven het echte getal."),
+        ("stack_aandeel", "Stackvervanging", "% van module-CAPEX", 0, 100, 100, ""),
+        ("opex_aandeel", "Vaste OPEX", "% van CAPEX per jaar", 0, 10, 100, ""),
+        ("stroomprijs_eur_mwh", "Stroomprijs", "€/MWh", 0, 300, 1, "Voor alle verbruikte stroom, ook warmhouden."),
+        ("rente", "Rente", "%", 0, 20, 100, ""),
+        ("looptijd_jaar", "Looptijd", "jaar", 5, 40, 1, ""),
+    ]),
+]
+
+
+def parse_aannames(data: dict) -> Aannames:
+    """Valideer opgestuurde aannames in getoonde eenheden tegen de grenzen uit AANNAMES_META."""
+    values = {}
+    for _, items in AANNAMES_META:
+        for key, label, _, low, high, scale, _ in items:
+            if key not in data:
+                continue
+            value = data[key]
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or not low <= value <= high:
+                raise ValueError(f"{label}: kies een waarde van {low} tot {high}.")
+            values[key] = value / scale
+    return replace(Aannames(), **values)
+
+
+def meta_json() -> dict:
+    base = asdict(Aannames())
+    return {"groepen": [{"naam": name, "velden": [
+        {"key": key, "label": label, "eenheid": unit, "min": low, "max": high, "schaal": scale, "uitleg": hint,
+         "standaard": round(base[key] * scale, 6)}
+        for key, label, unit, low, high, scale, hint in items]} for name, items in AANNAMES_META],
+        "strategieen": STRATEGIES, "modules": MODULE_COUNTS, "jaren": available_years()}
+
+
+def available_years() -> list[int]:
+    return list(range(FIRST_YEAR, datetime.now(LOCAL).year))
+
+
+# ---------------------------------------------------------------- windaanbod
+
+def supply_year(year: int, client: KNMIClient | None = None) -> dict:
+    """Bruto toegewezen windvermogen (MW) per tien minuten met tijdstempels; meetgaten vallen weg.
+
+    Bewaard per jaar en per parkmodel, zodat een volgende run niets bij KNMI hoeft op te halen.
+    """
+    model = hashlib.sha256(json.dumps([PARKS, FRYSLAN_SHARE, load_curve("fryslan"), load_curve("beabuorren")],
+                                      sort_keys=True, default=str).encode()).hexdigest()[:12]
+    path = CACHE / f"aanbod-{year}-{model}.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    client = client or KNMIClient(ROOT / ".cache" / "knmi")
+    start = datetime(year, 1, 1, tzinfo=LOCAL).astimezone(timezone.utc)
+    end = datetime(year + 1, 1, 1, tzinfo=LOCAL).astimezone(timezone.utc)
+    series = {}
+    for park_id, park in PARKS.items():
+        samples = parse_wind(client.observations_range(park["station"], start, end), park["station"])
+        curve = load_curve(park_id)
+        power = {}
+        for moment, speed in samples:
+            if speed is None or not start <= moment < end:
+                continue
+            alpha = shear_exponent(park, moment.astimezone(LOCAL).date())
+            power[moment] = park_power_mw(speed * (park["hub_height"] / 10) ** alpha, park_id, curve, wake=True)
+        series[park_id] = power
+    shared = sorted(series["fryslan"].keys() & series["beabuorren"].keys())
+    data = {"jaar": year, "t": [int(t.timestamp()) for t in shared],
+            "mw": [round(FRYSLAN_SHARE * series["fryslan"][t] + series["beabuorren"][t], 4) for t in shared]}
+    CACHE.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(data))
+    temporary.replace(path)
+    return data
+
+
+# ---------------------------------------------------------------- module
+
+def stack_kg_h(stack_mw: float, size_mw: float, a: Aannames) -> float:
+    """Waterstof per uur uit het stackvermogen van één module."""
+    x = stack_mw / size_mw
+    if x <= 0 or x < a.minimumlast - 1e-9:
+        return 0.0
+    faraday = max(0.0, 1 - a.faradayverlies_10 * 0.1 / x)
+    sec = (a.sec_laag + (a.sec_vol - a.sec_laag) * x) * (1 + a.rendementsverlies_eind / 2)
+    return stack_mw * 1000 / sec * faraday
+
+
+def draw_mw(stack_mw: float, size_mw: float, a: Aannames) -> float:
+    """Elektrisch verbruik van een draaiende module inclusief BoP."""
+    return stack_mw * (1 + a.bop_variabel) + a.bop_vast * size_mw
+
+
+def equal_share(power: float, k: int, size: float, a: Aannames) -> float:
+    """Stackvermogen per module als k modules het aanbod gelijk delen."""
+    return min(size, (power / k - a.bop_vast * size) / (1 + a.bop_variabel))
+
+
+def desired_count(power: float, n_avail: int, size: float, a: Aannames, strategy: str, memo: dict) -> int:
+    minimum = draw_mw(a.minimumlast * size, size, a)
+    fits = min(n_avail, floor(power / minimum)) if minimum > 0 else n_avail
+    if strategy == "samen":
+        return n_avail if fits >= n_avail and n_avail else 0
+    if strategy == "bijschakelen":
+        full = draw_mw(size, size, a)
+        k = min(n_avail, floor(power / full))
+        return k + (1 if k < n_avail and power - k * full >= minimum else 0)
+    key = (round(power, 2), n_avail)
+    if key not in memo:
+        best, best_k = 0.0, 0
+        for k in range(1, fits + 1):
+            kg = k * stack_kg_h(equal_share(key[0], k, size, a), size, a)
+            if kg > best + 1e-9:
+                best, best_k = kg, k
+        memo[key] = best_k
+    return memo[key]
+
+
+def outages(times: list[int], n: int, year: int, a: Aannames) -> list[list[bool]]:
+    """Per module per tijdstap: True als de module in onderhoud of storing is.
+
+    Onderhoud valt na elkaar vanaf half april, als het het minst waait. Storingen
+    volgen een vaste trekking per jaar en module, zodat elke configuratie dezelfde pech krijgt.
+    """
+    year_start = datetime(year, 1, 1, tzinfo=LOCAL)
+    blocks = []
+    for i in range(n):
+        spans = []
+        if a.onderhoud_dagen > 0:
+            begin = year_start + timedelta(days=105 + i * a.onderhoud_dagen % 150)
+            spans.append((begin.timestamp(), (begin + timedelta(days=a.onderhoud_dagen)).timestamp()))
+        if a.storingen_per_jaar > 0 and a.hersteltijd_uur > 0:
+            draw = random.Random(year * 100 + i)
+            moment = year_start.timestamp()
+            while True:
+                moment += draw.expovariate(a.storingen_per_jaar / (365 * 86400))
+                if moment >= year_start.timestamp() + 365 * 86400:
+                    break
+                spans.append((moment, moment + a.hersteltijd_uur * 3600))
+        blocks.append(spans)
+    return [[any(lo <= t < hi for lo, hi in spans) for spans in blocks] for t in times]
+
+
+def simulate(supply: dict, n: int, a: Aannames, strategy: str, trace: range | None = None) -> dict:
+    times, mw = supply["t"], supply["mw"]
+    size = a.capaciteit_mw / n
+    min_on, min_off, delay = a.min_aan_min / 60, a.min_uit_min / 60, a.startvertraging_min / 60
+    minimum = draw_mw(a.minimumlast * size, size, a)
+    want_h = 0.0    # hoe lang er al wind is voor meer modules dan er draaien
+    down = outages(times, n, supply["jaar"], a)
+    on = [False] * n
+    on_h = [0.0] * n
+    off_h = [a.koud_na_uur + min_off] * n   # het jaar begint koud
+    startup = [0.0] * n
+    stack = [0.0] * n
+    eq = [0.0] * n
+    hours = [0.0] * n
+    warm = [0] * n
+    cold = [0] * n
+    kg = used = standby = lost_outage = 0.0
+    daily: dict[str, list[float]] = {}
+    steps = []
+    memo = {}
+    for step, (stamp, power) in enumerate(zip(times, mw)):
+        avail = [i for i in range(n) if not down[step][i]]
+        running = [i for i in avail if on[i]]
+        must = [i for i in running if on_h[i] < min_on]
+        starters = [i for i in avail if not on[i] and off_h[i] >= min_off]
+        fits = min(len(avail), floor(power / minimum)) if minimum > 0 else len(avail)
+        k = desired_count(power, len(avail), size, a, strategy, memo)
+        want_h = want_h + STEP_H if k > len(running) else 0.0
+        if want_h < delay - 1e-9:
+            starters = []
+        k = max(min(k, len(running) + len(starters)), min(len(must), fits))
+        k = min(k, fits, len(running) + len(starters))
+        # Lopende modules eerst (verplichte vooraan), bij starten de minst versleten.
+        keep = sorted(running, key=lambda i: (i not in must, eq[i]))[:k]
+        chosen = keep + sorted(starters, key=lambda i: eq[i])[:k - len(keep)]
+        loads = [0.0] * n
+        if strategy == "bijschakelen":
+            rest = power
+            for i in chosen:
+                loads[i] = max(0.0, min(size, (rest - a.bop_vast * size) / (1 + a.bop_variabel)))
+                rest -= draw_mw(loads[i], size, a)
+        elif chosen:
+            share = equal_share(power, len(chosen), size, a)
+            for i in chosen:
+                loads[i] = share
+        step_kg = 0.0
+        for i in range(n):
+            x = loads[i]
+            if x >= a.minimumlast * size - 1e-9 and x > 0:
+                if not on[i]:
+                    if off_h[i] >= a.koud_na_uur:
+                        cold[i] += 1; eq[i] += a.eq_uur_koude_start; startup[i] = a.opstart_koud_min
+                    else:
+                        warm[i] += 1; eq[i] += a.eq_uur_warme_start; startup[i] = a.opstart_warm_min
+                    on[i], on_h[i] = True, 0.0
+                productive = max(0.0, 10 - startup[i]) / 10
+                startup[i] = max(0.0, startup[i] - 10)
+                step_kg += stack_kg_h(x, size, a) * STEP_H * productive
+                used += draw_mw(x, size, a) * STEP_H
+                eq[i] += STEP_H + abs(x - stack[i]) / size / 2 * a.eq_uur_per_lastcyclus
+                hours[i] += STEP_H
+                on_h[i] += STEP_H
+                stack[i] = x
+            else:
+                if on[i]:
+                    on[i], off_h[i] = False, 0.0
+                if down[step][i]:
+                    lost_outage += size * STEP_H
+                elif off_h[i] < a.koud_na_uur:
+                    standby += a.standby * size * STEP_H
+                off_h[i] += STEP_H
+                stack[i] = 0.0
+        kg += step_kg
+        day = datetime.fromtimestamp(stamp, LOCAL).date().isoformat()
+        entry = daily.setdefault(day, [0.0, 0.0])
+        entry[0] += step_kg
+        entry[1] = max(entry[1], float(len(avail) < n))
+        if trace is not None and step in trace:
+            steps.append({"t": stamp, "aanbod": power, "stack": [round(v, 3) for v in loads],
+                          "verbruik": round(sum(draw_mw(v, size, a) for v in loads if v > 0), 3),
+                          "uit": [down[step][i] for i in range(n)]})
+    scale = 8760 / (len(mw) * STEP_H) if mw else 0   # meetgaten: herschalen naar een vol jaar
+    supply_mwh = sum(mw) * STEP_H
+    return {
+        "modules": n, "module_mw": size, "strategie": strategy, "jaar": supply["jaar"],
+        "waterstof_t": kg * scale / 1000, "verbruik_mwh": used * scale, "standby_mwh": standby * scale,
+        "aanbod_mwh": supply_mwh * scale,
+        "benutting": used / supply_mwh if supply_mwh else 0.0,
+        "bedrijfsuren_gem": sum(hours) / n * scale,
+        "starts_warm_per_module": sum(warm) / n * scale, "starts_koud_per_module": sum(cold) / n * scale,
+        "eq_uren_per_module": [e * scale for e in eq],
+        "dekking_uur": len(mw) * STEP_H,
+        "dagen": {d: [round(v[0], 1), v[1]] for d, v in daily.items()},
+        "stappen": steps,
+    }
+
+
+# ---------------------------------------------------------------- kosten
+
+def crf(a: Aannames) -> float:
+    return a.rente / (1 - (1 + a.rente) ** -a.looptijd_jaar) if a.rente else 1 / a.looptijd_jaar
+
+
+def economics(result: dict, a: Aannames) -> dict:
+    n, size = result["modules"], result["module_mw"]
+    module_capex = a.capex_eur_kw * a.capex_ref_mw * 1000 * (size / a.capex_ref_mw) ** a.capex_schaal
+    capex = n * module_capex
+    # Continue benadering: elk equivalent bedrijfsuur verbruikt een deel van een stack.
+    stack = sum(a.stack_aandeel * module_capex * e / a.stack_levensduur_uur for e in result["eq_uren_per_module"])
+    power = (result["verbruik_mwh"] + result["standby_mwh"]) * a.stroomprijs_eur_mwh
+    annual = capex * crf(a) + a.opex_aandeel * capex + stack + power
+    kg = result["waterstof_t"] * 1000
+    wear = [e for e in result["eq_uren_per_module"] if e]
+    return {"capex_meur": capex / 1e6, "stack_meur_jaar": stack / 1e6, "kosten_meur_jaar": annual / 1e6,
+            "stroom_meur_jaar": power / 1e6, "kapitaal_meur_jaar": capex * (crf(a) + a.opex_aandeel) / 1e6,
+            "lcoh_eur_kg": annual / kg if kg else None,
+            "jaren_tot_stackwissel": a.stack_levensduur_uur / max(wear) if wear else None}
+
+
+def summarise(per_year: list[dict], a: Aannames) -> dict:
+    """Gemiddelde over windjaren, plus de spreiding tussen jaren voor waterstof en LCOH."""
+    out = {key: value for key, value in per_year[0].items() if key not in ("dagen", "stappen", "jaar")}
+    for key, value in out.items():
+        if key == "eq_uren_per_module":
+            out[key] = [sum(r[key][i] for r in per_year) / len(per_year) for i in range(len(value))]
+        elif isinstance(value, float):
+            out[key] = sum(r[key] for r in per_year) / len(per_year)
+    out.update(economics(out, a))
+    lcoh = [economics(r, a)["lcoh_eur_kg"] for r in per_year]
+    out["jaren"] = {r["jaar"]: {"waterstof_t": r["waterstof_t"], "lcoh_eur_kg": l} for r, l in zip(per_year, lcoh)}
+    return out
+
+
+def break_even(rows: list[dict], a: Aannames) -> None:
+    """Hoogste CAPEX waarbij elke configuratie dezelfde LCOH haalt als één module.
+
+    Het getal waaraan offertes te toetsen zijn, los van de aangenomen kostenschaal.
+    """
+    single = rows[0]
+    previous = None
+    for row in rows:
+        wear = sum(row["eq_uren_per_module"]) / row["modules"] / a.stack_levensduur_uur
+        power = (row["verbruik_mwh"] + row["standby_mwh"]) * a.stroomprijs_eur_mwh
+        target = (single["lcoh_eur_kg"] or 0) * row["waterstof_t"] * 1000
+        row["capex_break_even_meur"] = (target - power) / (crf(a) + a.opex_aandeel + a.stack_aandeel * wear) / 1e6
+        if previous:
+            row["extra_waterstof_t"] = row["waterstof_t"] - previous["waterstof_t"]
+            row["extra_kosten_meur_jaar"] = row["kosten_meur_jaar"] - previous["kosten_meur_jaar"]
+        previous = row
+
+
+def _job(args):
+    supply, n, a, strategy = args
+    return simulate(supply, n, a, strategy)
+
+
+def run(a: Aannames, years: list[int], counts: list[int], strategy: str, workers: int | None = None) -> dict:
+    """Alle configuraties over alle windjaren; uitkomst bewaard per set invoer."""
+    if strategy not in STRATEGIES or not years or not counts:
+        raise ValueError("Kies een besturing, minstens één windjaar en minstens één moduleaantal.")
+    counts = sorted(set(counts))
+    supplies = {year: supply_year(year) for year in years}
+    key = hashlib.sha256(json.dumps([MODEL_VERSION, asdict(a), years, counts, strategy,
+                                     [len(s["t"]) for s in supplies.values()]]).encode()).hexdigest()[:20]
+    path = CACHE / f"uitkomst-{key}.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    jobs = [(supplies[y], n, a, strategy) for n in counts for y in years]
+    with ProcessPoolExecutor(workers) as pool:
+        results = list(pool.map(_job, jobs))
+    rows = []
+    for index, n in enumerate(counts):
+        rows.append(summarise(results[index * len(years):(index + 1) * len(years)], a))
+    break_even(rows, a)
+    example = example_day(results, counts, years)
+    data = {"sleutel": key, "aannames": asdict(a), "strategie": strategy, "jaren": years, "rijen": rows,
+            "voorbeelddag": example,
+            "aanbod": {y: {"mwh": sum(s["mw"]) * STEP_H * 8760 / (len(s["mw"]) * STEP_H),
+                           "dekking_uur": len(s["mw"]) * STEP_H} for y, s in supplies.items()}}
+    CACHE.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data))
+    return data
+
+
+def example_day(results: list[dict], counts: list[int], years: list[int]) -> str | None:
+    """Een representatieve dag waarop opsplitsen (4 modules, of het dichtstbijzijnde aantal) helpt.
+
+    Niet de uitschieter: die valt vaak op een stormdag waarop Fryslân rond cut-out aan en uit gaat.
+    Wel het 75e percentiel van de dagwinst, op dagen zonder onderhoud of storing.
+    """
+    if len(counts) < 2:
+        return None
+    other = min(counts[1:], key=lambda n: abs(n - 4))
+    by = {(r["modules"], r["jaar"]): r["dagen"] for r in results}
+    gains = []
+    for year in years:
+        one, many = by[(counts[0], year)], by[(other, year)]
+        for day, (kg, outage) in many.items():
+            if day in one and not outage and not one[day][1] and kg > one[day][0]:
+                gains.append((kg - one[day][0], day))
+    return sorted(gains)[int(len(gains) * .75)][1] if gains else None
+
+
+def day_trace(a: Aannames, day: date, counts: list[int], strategy: str) -> dict:
+    """Tijdstappen van één dag per configuratie; de simulatie start twee dagen eerder om warm te lopen."""
+    supply = supply_year(day.year)
+    start = datetime.combine(day, datetime.min.time(), LOCAL)
+    lo = (start - timedelta(days=2)).timestamp()
+    first, end = start.timestamp(), (start + timedelta(days=1)).timestamp()
+    picked = [i for i, t in enumerate(supply["t"]) if lo <= t < end]
+    if not picked:
+        raise ValueError("Geen windgegevens voor deze dag.")
+    window = {"jaar": supply["jaar"], "t": [supply["t"][i] for i in picked], "mw": [supply["mw"][i] for i in picked]}
+    shown = range(next(i for i, t in enumerate(window["t"]) if t >= first), len(picked))
+    out = {}
+    for n in sorted(set(counts)):
+        result = simulate(window, n, a, strategy, trace=shown)
+        out[n] = {"module_mw": result["module_mw"], "stappen": result["stappen"],
+                  "waterstof_kg": result["dagen"].get(day.isoformat(), [0])[0]}
+    return {"datum": day.isoformat(), "configuraties": out}
+
+
+# ---------------------------------------------------------------- opdrachtregel
+
+CSV_FIELDS = ["scenario", "strategie", "modules", "module_mw", "waterstof_t", "benutting", "bedrijfsuren_gem",
+              "starts_warm_per_module", "starts_koud_per_module", "jaren_tot_stackwissel", "capex_meur",
+              "stack_meur_jaar", "kosten_meur_jaar", "lcoh_eur_kg", "capex_break_even_meur", "extra_waterstof_t",
+              "extra_kosten_meur_jaar"]
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Simuleer een elektrolyser in N modules op het windprofiel.")
+    parser.add_argument("--jaren", type=int, nargs="+", default=available_years())
+    parser.add_argument("--modules", type=int, nargs="+", default=MODULE_COUNTS)
+    parser.add_argument("--aannames", type=Path, help="JSON-bestand met afwijkende aannames, in getoonde eenheden (minimumlast 20 = 20 %).")
+    parser.add_argument("--uit", type=Path, default=ROOT / "uitvoer" / "opsplitsing")
+    args = parser.parse_args()
+    load_env_file(ROOT / ".env")
+    try:
+        base = parse_aannames(json.loads(args.aannames.read_text())) if args.aannames else Aannames()
+        for year in args.jaren:
+            supply_year(year)
+    except (KNMIError, ValueError) as exc:
+        print(str(exc))
+        return 1
+    scenarios = {"basis": ({}, list(STRATEGIES)),
+                 "minimumlast 10 %": ({"minimumlast": 0.10}, ["verdelen"]),
+                 "minimumlast 40 %": ({"minimumlast": 0.40}, ["verdelen"]),
+                 "CAPEX -25 %": ({"capex_eur_kw": base.capex_eur_kw * 0.75}, ["verdelen"]),
+                 "CAPEX +25 %": ({"capex_eur_kw": base.capex_eur_kw * 1.25}, ["verdelen"])}
+    scenarios.update({f"windjaar {y}": ({}, ["verdelen"]) for y in args.jaren})
+    rows = []
+    for name, (changes, strategies) in scenarios.items():
+        years = [int(name[-4:])] if name.startswith("windjaar") else args.jaren
+        for strategy in strategies:
+            for row in run(replace(base, **changes), years, args.modules, strategy)["rijen"]:
+                rows.append({"scenario": name, **row})
+    args.uit.mkdir(parents=True, exist_ok=True)
+    with (args.uit / "resultaten.csv").open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, CSV_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+    for row in rows:
+        if row["scenario"] == "basis" or row["modules"] in (1, 4, 11):
+            print(f'{row["scenario"]:18} {row["strategie"]:12} N={row["modules"]:2} '
+                  f'H2 {row["waterstof_t"]:7.1f} t  LCOH {row["lcoh_eur_kg"]:5.2f} €/kg  '
+                  f'starts/mod {row["starts_warm_per_module"] + row["starts_koud_per_module"]:5.0f}  '
+                  f'CAPEX {row["capex_meur"]:5.1f} (max {row["capex_break_even_meur"]:5.1f}) M€  '
+                  f'stackwissel {row["jaren_tot_stackwissel"]:4.1f} j')
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Elektrolyser opsplitsen</title>
+  <link rel="stylesheet" href="./opsplitsing.css"><script src="./opsplitsing.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/">Windparken</a>
+      <span class="zone">Lokale analyse · Europe/Amsterdam</span>
+    </header>
+    <main>
+      <nav class="park-nav" aria-label="Pagina's">
+        <a href="/">Windprofiel</a>
+        <a href="/opsplitsing" aria-current="page">Elektrolyser opsplitsen</a>
+      </nav>
+
+      <section class="intro">
+        <div class="eyebrow">ONDERZOEK · 44 MW ELEKTROLYSER</div>
+        <h1>Eén grote elektrolyser, of meerdere kleine modules?</h1>
+        <p>Een elektrolyser kan niet onder zijn minimumlast draaien. Kleinere modules hebben een lagere ondergrens en
+          vangen daardoor meer zwakke wind op, maar ze kosten meer per kW. Deze pagina rekent dat door op vier echte
+          windjaren, met jouw eigen aannames.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="how-title">
+        <div class="step-heading"><span class="step-number">1</span><div>
+          <h2 id="how-title">Zo werkt de analyse</h2>
+          <p>Zes stappen van KNMI-meting naar kosten per kilo waterstof. Elke stap gebruikt de aannames onder stap 2.</p>
+        </div></div>
+        <ol class="flow">
+          <li><span class="flow-n">A</span><h3>KNMI-wind</h3>
+            <p>Tienminutengemiddelden van Houtribdijk (voor Fryslân) en Stavoren (voor Beabuorren), vier volledige jaren.</p>
+            <code>v₁₀ per 10 min</code></li>
+          <li><span class="flow-n">B</span><h3>Parkvermogen</h3>
+            <p>Wind naar ashoogte met de seizoensexponent, door de vermogenscurve, minus zogverlies. Hetzelfde model als de windprofielpagina.</p>
+            <code>v = v₁₀ · (h/10)<sup>α</sup></code></li>
+          <li><span class="flow-n">C</span><h3>Aanbod</h3>
+            <p>De elektrolyser krijgt 10 % van Fryslân plus heel Beabuorren, zoals op mijnwindpark.nl.</p>
+            <code>P = 0,1 · Fryslân + Beabuorren</code></li>
+          <li><span class="flow-n">D</span><h3>Modules inzetten</h3>
+            <p>Per tien minuten kiest de besturing hoeveel modules draaien. Grenzen: minimumlast, BoP, aan- en uittijden, startvertraging, onderhoud en storingen.</p>
+            <code>k modules · P/k per module</code></li>
+          <li><span class="flow-n">E</span><h3>Waterstof en slijtage</h3>
+            <p>Stackvermogen door de rendementscurve geeft kilo's. Starts en lastwisselingen tellen als extra bedrijfsuren voor de stack.</p>
+            <code>kg = stack-MWh ÷ kWh/kg</code></li>
+          <li><span class="flow-n">F</span><h3>Kosten</h3>
+            <p>CAPEX met rente, vaste OPEX, stackvervanging en stroom, gedeeld door de waterstof per jaar.</p>
+            <code>LCOH = kosten ÷ kg per jaar</code></li>
+        </ol>
+
+        <div class="explain-grid">
+          <figure class="explain">
+            <h3>Waarom opsplitsen helpt</h3>
+            <p>De minimumlast geldt per module. Eén module van 44 MW start pas bij ruim 10 MW aanbod; vier modules van 11 MW al bij 2,7 MW.
+              Alles onder de drempel gaat verloren.</p>
+            <svg id="threshold-art" viewBox="0 0 440 220" role="img" aria-labelledby="threshold-title">
+              <title id="threshold-title">Schets: een golvend windaanbod met twee drempels. De lage drempel van een kleine module laat meer aanbod door dan de hoge drempel van één grote module.</title>
+            </svg>
+            <figcaption>Donker: aanbod dat één grote module benut. Licht: wat vier modules daarbovenop benutten. Schets op schaal van de aannames, geen meting.</figcaption>
+          </figure>
+          <figure class="explain">
+            <h3>Rendement per module</h3>
+            <p>Waterstof per MWh stroom, inclusief BoP en Faradayverlies, tegen de last. Onder de minimumlast produceert een module niets.</p>
+            <div id="efficiency-chart" class="chart" role="img" aria-label="Rendementscurve per module"></div>
+            <figcaption id="efficiency-caption">Volgt de aannames uit stap 2.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="input-title">
+        <div class="step-heading"><span class="step-number">2</span><div>
+          <h2 id="input-title">Aannames</h2>
+          <p>Alles is aan te passen. De standaardwaarden zijn plaatshouders; vervang ze door datasheets en offertes van leveranciers.
+            Je wijzigingen blijven in deze browser bewaard.</p>
+        </div></div>
+        <form id="form" novalidate>
+          <div class="choices">
+            <fieldset><legend>Besturing</legend><div id="strategies" class="radio-list"></div></fieldset>
+            <fieldset><legend>Windjaren</legend><div id="years" class="check-list"></div></fieldset>
+            <fieldset><legend>Aantal modules</legend><div id="counts" class="check-list"></div></fieldset>
+          </div>
+          <div id="groups" class="groups"></div>
+          <div class="form-actions">
+            <button class="primary-button" type="submit" id="run">Bereken</button>
+            <button class="secondary-button" type="button" id="reset">Alle standaardwaarden</button>
+            <span id="status" role="status" aria-live="polite"></span>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel" aria-labelledby="result-title" id="results" hidden>
+        <div class="step-heading"><span class="step-number">3</span><div>
+          <h2 id="result-title">Uitkomst</h2>
+          <p id="result-sub"></p>
+        </div></div>
+        <div id="headline" class="headline"></div>
+        <div class="chart-grid">
+          <figure class="chart-card">
+            <h3>Waterstof per jaar</h3>
+            <p>Gemiddelde over de windjaren; de streep loopt van het zwakste tot het sterkste jaar.</p>
+            <div id="h2-chart" class="chart"></div>
+          </figure>
+          <figure class="chart-card">
+            <h3>CAPEX: aangenomen en maximaal</h3>
+            <p>Boven de maximale CAPEX is één module goedkoper per kilo. Dit is het getal om offertes aan te toetsen.</p>
+            <div id="capex-chart" class="chart"></div>
+          </figure>
+          <figure class="chart-card">
+            <h3>Kosten per kilo (LCOH)</h3>
+            <p>Met de aangenomen CAPEX en schaalfactor; de streep toont de spreiding tussen windjaren.</p>
+            <div id="lcoh-chart" class="chart"></div>
+          </figure>
+          <figure class="chart-card">
+            <h3>Wat elke extra stap oplevert</h3>
+            <p>Extra waterstof per jaar ten opzichte van het vorige aantal modules.</p>
+            <div id="step-chart" class="chart"></div>
+          </figure>
+        </div>
+        <details class="table-details" open>
+          <summary>Alle uitkomsten in een tabel</summary>
+          <div class="table-scroll"><table id="table"></table></div>
+        </details>
+      </section>
+
+      <section class="panel" aria-labelledby="day-title" id="day-panel" hidden>
+        <div class="step-heading"><span class="step-number">4</span><div>
+          <h2 id="day-title">Een dag van dichtbij</h2>
+          <p>Hetzelfde aanbod, twee configuraties. Standaard een gewone dag waarop opsplitsen hielp: beter dan driekwart van de dagen, zonder onderhoud of storing. Waar de lijnen samenvallen, draaien beide even hard.</p>
+        </div></div>
+        <div class="day-controls">
+          <label>Dag <input type="date" id="day"></label>
+          <label>Vergelijk 1 module met <select id="day-count"></select></label>
+          <button class="secondary-button" type="button" id="day-run">Toon dag</button>
+          <span id="day-status" role="status" aria-live="polite"></span>
+        </div>
+        <div id="day-legend" class="legend"></div>
+        <div id="day-chart" class="chart day-chart"></div>
+        <p id="day-summary" class="note"></p>
+      </section>
+
+      <footer>KNMI EDR · rekenmodel windprofiel · plaatshouders voor leveranciersgegevens · TASA Orbiter onder SIL Open Font License</footer>
+    </main>
+  </div>
+  <div id="tooltip" class="tooltip" role="presentation" hidden></div>
+</body>
+</html>

@@ -70,6 +70,41 @@ Meer uitleg:
 - [Formules en ijking](docs/rekenmodel.md): rekenwijze, aannames en de vergelijking met productiedata.
 - [Databronnen](docs/databronnen.md): KNMI-dataset, stations, parkgegevens en hun bronnen.
 
+## Elektrolyser opsplitsen
+
+Open <http://127.0.0.1:8000/opsplitsing> (of de link bovenaan de startpagina). De
+pagina rekent door of een elektrolyser van 44 MW beter in één module of in 2 tot 16
+gelijke modules kan, op vier volledige windjaren (2022–2025). De voeding is dezelfde
+als op mijnwindpark.nl: 10 % van Windpark Fryslân plus heel Wynpark Beabuorren.
+
+- **Zo werkt de analyse** laat in zes stappen zien hoe de berekening loopt, met een
+  schets van de startdrempels en de rendementscurve per module.
+- **Aannames**: elke aanname is aan te passen (minimumlast, rendement, BoP, aan- en
+  uittijden, startvertraging, onderhoud en storingen, slijtage en kosten). De
+  standaardwaarden zijn plaatshouders; vervang ze door datasheets en offertes.
+  Je wijzigingen blijven in je browser bewaard.
+- **Uitkomst**: knikpunt, extra waterstof en de *maximale CAPEX*: hoeveel een
+  configuratie hooguit mag kosten om per kilo niet duurder te zijn dan één module.
+  Dat getal hangt niet af van de aangenomen kostenschaal en is het getal om offertes
+  aan te toetsen.
+- **Een dag van dichtbij** vergelijkt het verbruik van 1 module en N modules per tien minuten.
+
+De eerste berekening haalt de vier windjaren één keer bij KNMI op (een paar seconden
+per jaar). Het aanbod per jaar en elke uitkomst worden in `.cache/opsplitsing/`
+bewaard; daarna komt dezelfde berekening direct uit de cache en kost een nieuwe set
+aannames ongeveer tien seconden.
+
+Zonder webpagina, met gevoeligheden voor minimumlast, CAPEX en windjaar:
+
+```sh
+python3 -m windprofiel.opsplitsing                              # schrijft uitvoer/opsplitsing/resultaten.csv
+python3 -m windprofiel.opsplitsing --aannames mijn-offerte.json # bijvoorbeeld {"minimumlast": 10, "capex_eur_kw": 1700}
+```
+
+Beperkingen: tienminutengemiddelden verbergen kortere schommelingen; de rendementscurve
+is lineair met een Faradayterm; degradatie telt starts en lastwisselingen als extra
+bedrijfsuren, niet als functie van de last; stackvervanging is een continue benadering.
+
 ## Curve-formaat
 
 Een eigen curve is een JSON-bestand met:
@@ -92,13 +127,15 @@ is geen certificering van de bron.
 | `windprofiel/profile.py` | dagminuten, curves en kubisch model |
 | `windprofiel/application.py` | parkgegevens, profielberekening en CSV |
 | `windprofiel/server.py` | lokale webserver en API |
+| `windprofiel/opsplitsing.py` | simulatie elektrolyser in N modules, met cache |
 | `windprofiel/preview.py` | maakt de zelfstandige `index.html` |
-| `windprofiel/static/` | template, JavaScript en CSS van de webapp |
+| `windprofiel/static/` | pagina's, JavaScript, CSS en lettertype (TASA Orbiter, SIL OFL) |
 | `windprofiel/data/` | curve van Beabuorren |
 | `tests/` | unit-tests zonder netwerk |
 | `docs/` | rekenmodel en databronnen |
 
-Lokale bestanden onder `.cache/` (KNMI-antwoorden, geüploade curves) en `.env`
+Lokale bestanden onder `.cache/` (KNMI-antwoorden, geüploade curves, windaanbod en
+uitkomsten van de opsplitsing) en `.env`
 gaan niet mee in Git. Dagen van de laatste 24 uur worden niet gecachet, zodat
 ze nieuwe metingen krijgen.
 
@@ -108,6 +145,7 @@ ze nieuwe metingen krijgen.
 python3 -m unittest discover -s tests -v   # unit-tests, zonder netwerk of sleutel
 python3 -m windprofiel.knmi                # controleert echte KNMI-toegang
 node --check windprofiel/static/app.js     # JavaScript-syntax
+node --check windprofiel/static/opsplitsing.js
 ```
 
 Na wijzigingen aan de webapp maak je de zelfstandige pagina opnieuw (met

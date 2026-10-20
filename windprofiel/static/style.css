@@ -24,6 +24,12 @@ h1 {
   letter-spacing: -2px;
   margin: 12px 0;
 }
+.page-link {
+  display: inline-block;
+  margin-top: 4px;
+  font-weight: 600;
+  color: inherit;
+}
 header p {
   color: #647775;
   max-width: 650px;
