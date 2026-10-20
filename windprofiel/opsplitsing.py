@@ -25,14 +25,14 @@ import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import date, datetime, timedelta, timezone
-from math import floor
+from math import ceil, floor
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .application import PARKS, ROOT, load_curve, park_power_mw, parse_wind, shear_exponent
 from .knmi import KNMIClient, KNMIError, load_env_file
 
-MODEL_VERSION = 8   # verhogen bij elke rekenwijziging; maakt oude uitkomsten in de cache ongeldig
+MODEL_VERSION = 9   # verhogen bij elke rekenwijziging; maakt oude uitkomsten in de cache ongeldig
 STEP_H = 1 / 6
 FRYSLAN_SHARE = 0.10
 CACHE = ROOT / ".cache" / "opsplitsing"
@@ -341,9 +341,8 @@ def desired_count(power: float, n_avail: int, size: float, a: Aannames, strategy
     if strategy == "samen":
         return n_avail if fits >= n_avail and n_avail else 0
     if strategy == "bijschakelen":
-        full = draw_mw(size, size, a)
-        k = min(n_avail, floor(power / full))
-        return k + (1 if k < n_avail and power - k * full >= minimum else 0)
+        # Zoveel modules als nodig om het aanbod op te nemen; een kleine rest wordt herverdeeld (sequential_loads).
+        return min(fits, ceil(power / draw_mw(size, size, a))) if power >= minimum else 0
     key = (round(power, 2), n_avail)
     if key not in memo:
         best, best_k = 0.0, 0
@@ -353,6 +352,24 @@ def desired_count(power: float, n_avail: int, size: float, a: Aannames, strategy
                 best, best_k = kg, k
         memo[key] = best_k
     return memo[key]
+
+
+def sequential_loads(power: float, k: int, size: float, a: Aannames) -> list[float]:
+    """Stackvermogen per module bij bijschakelen: vol op één na, de laatste krijgt de rest.
+
+    Valt de rest onder de minimumlast, dan levert de voorlaatste module in tot de laatste precies op
+    minimumlast draait. Zo gaat geen aanbod verloren dat de modules samen kunnen opnemen.
+    """
+    full, minimum = draw_mw(size, size, a), draw_mw(a.minimumlast * size, size, a)
+    k = min(k, floor(power / minimum)) if minimum > 0 else k
+    if k <= 0:
+        return []
+    total = min(power, k * full)
+    draws = [full] * (k - 1) + [total - (k - 1) * full]
+    if k > 1 and draws[-1] < minimum:
+        draws[-2] -= minimum - draws[-1]
+        draws[-1] = minimum
+    return [max(0.0, min(size, (d - a.bop_vast * size) / (1 + a.bop_variabel))) for d in draws]
 
 
 def outages(times: list[int], n: int, year: int, a: Aannames) -> list[list[bool]]:
@@ -420,10 +437,8 @@ def simulate(supply: dict, n: int, a: Aannames, strategy: str, trace: range | No
         chosen = keep + sorted(starters, key=lambda i: eq[i])[:k - len(keep)]
         loads = [0.0] * n
         if strategy == "bijschakelen":
-            rest = power
-            for i in chosen:
-                loads[i] = max(0.0, min(size, (rest - a.bop_vast * size) / (1 + a.bop_variabel)))
-                rest -= draw_mw(loads[i], size, a)
+            for i, x in zip(chosen, sequential_loads(power, len(chosen), size, a)):
+                loads[i] = x
         elif chosen:
             share = equal_share(power, len(chosen), size, a)
             for i in chosen:
@@ -562,7 +577,11 @@ def break_even(rows: list[dict], a: Aannames) -> None:
         # Bruto CAPEX; de subsidie is per kW en dus voor elke configuratie even groot.
         row["capex_break_even_meur"] = ((target - power + subsidy_eur(a) * crf(a))
                                         / (crf(a) + a.opex_aandeel + a.stack_aandeel * wear) / 1e6)
-        row["vaste_kosten_break_even_meur"] = fixed_cost_break_even(single, row, a)
+        limit = fixed_cost_break_even(single, row, a)
+        row["vaste_kosten_break_even_meur"] = limit
+        # Onder een halve ton is het verschil afrondingsruis: dan loont opsplitsen niet, ook niet gratis.
+        row["opsplitsen"] = None if row is single else "loont" if limit is not None and limit >= 0.005 else "loont_niet"
+        row["uitsplitsing"] = None if row is single else decompose(single, row)
         if previous:
             row["extra_waterstof_t"] = row["waterstof_t"] - previous["waterstof_t"]
             row["extra_kosten_meur_jaar"] = row["kosten_meur_jaar"] - previous["kosten_meur_jaar"]
@@ -580,6 +599,21 @@ def fixed_cost_break_even(single: dict, row: dict, a: Aannames) -> float | None:
                      - economics(single, replace(a, vaste_kosten_module_meur=f))["lcoh_eur_kg"])
     slope = gap(1.0) - gap(0.0)
     return -gap(0.0) / slope if slope > 1e-12 else None
+
+
+def decompose(single: dict, row: dict) -> dict:
+    """Verschil in kosten per kilo met de eerste configuratie, exact in vier delen (€/kg).
+
+    K = kapitaal + vaste OPEX, S = stackvervanging, E = stroom, H = kilo's per jaar.
+    """
+    h1, hn = single["waterstof_t"] * 1000, row["waterstof_t"] * 1000
+    k1, kn = single["kapitaal_meur_jaar"] * 1e6, row["kapitaal_meur_jaar"] * 1e6
+    s1, sn = single["stack_meur_jaar"] * 1e6, row["stack_meur_jaar"] * 1e6
+    e1, en = single["stroom_meur_jaar"] * 1e6, row["stroom_meur_jaar"] * 1e6
+    kwh = lambda r: (r["verbruik_mwh"] + r["standby_mwh"]) * 1000 / (r["waterstof_t"] * 1000)
+    return {"meer_waterstof": (k1 + s1) * (1 / hn - 1 / h1), "duurdere_installatie": (kn - k1) / hn,
+            "stroom_per_kilo": en / hn - e1 / h1, "stackvervanging": (sn - s1) / hn,
+            "kwh_per_kg": [kwh(single), kwh(row)]}
 
 
 def replacement_days(result: dict, a: Aannames) -> float:
@@ -635,6 +669,68 @@ def run(a: Aannames, years: list[int], counts: list[int], strategy: str, workers
     CACHE.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data))
     return {**data, "uit_cache": False, "rekentijd_s": data["eerste_rekentijd_s"]}
+
+
+# Aannames voor de gevoeligheid. Kosten rekenen opnieuw zonder simulatie; bedrijfsvoering vraagt een nieuwe simulatie.
+SENSITIVE_COSTS = ["offerte_meur", "vaste_kosten_module_meur", "stroomprijs_eur_mwh", "netkosten_eur_mwh", "rente",
+                   "looptijd_jaar", "stack_aandeel", "opex_aandeel"]
+SENSITIVE_OPERATION = ["minimumlast", "bop_vast", "deellastvoordeel", "standby", "opstart_koud_min", "startvertraging_min",
+                       "onderhoud_dagen", "stackwissel_weken"]
+SENSITIVITY_STEP = 0.25
+
+
+def variants(a: Aannames, key: str) -> list[tuple[float, Aannames]]:
+    """De aanname 25 % omlaag en omhoog, binnen de grenzen van het veld; ongeldige combinaties vallen weg."""
+    meta = {k: (low, high, scale) for _, items in AANNAMES_META for k, _, _, low, high, scale, _ in items}
+    low, high, scale = meta[key]
+    value = getattr(a, key)
+    out = []
+    for factor in (1 - SENSITIVITY_STEP, 1 + SENSITIVITY_STEP):
+        shown_value = min(max(value * scale * factor, low), high)
+        changed = replace(a, **{key: shown_value / scale})
+        if value and per_kw_eur(changed) > 0:
+            out.append((shown_value, changed))
+    return out
+
+
+def sensitivity(a: Aannames, years: list[int], n: int, strategy: str, workers: int | None = None) -> dict:
+    """Hoe het voordeel van n modules boven één module (€/kg) verschuift als elke aanname 25 % verandert."""
+    if n <= 1 or n not in MODULE_COUNTS or strategy not in STRATEGIES or not years:
+        raise ValueError("Kies een aantal modules groter dan 1, een besturing en minstens één windjaar.")
+    supplies = {year: supply_year(year) for year in years}
+    key = hashlib.sha256(json.dumps([MODEL_VERSION, "gevoeligheid", asdict(a), years, n, strategy, SENSITIVITY_STEP,
+                                     [len(s["t"]) for s in supplies.values()]]).encode()).hexdigest()[:20]
+    path = CACHE / f"gevoeligheid-{key}.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    cases = [("basis", a)] + [(f"{k}:{i}", v) for k in SENSITIVE_OPERATION for i, (_, v) in enumerate(variants(a, k))]
+    jobs = [(supplies[y], count, case, strategy) for _, case in cases for count in (1, n) for y in years]
+    with ProcessPoolExecutor(workers) as pool:
+        results = list(pool.map(_job, jobs))
+    size = len(years)
+    runs = {name: (results[2 * i * size:(2 * i + 1) * size], results[(2 * i + 1) * size:(2 * i + 2) * size])
+            for i, (name, _) in enumerate(cases)}
+
+    def advantage(name: str, variant: Aannames) -> float:
+        one, many = runs[name]
+        return summarise(one, variant)["lcoh_eur_kg"] - summarise(many, variant)["lcoh_eur_kg"]
+
+    base = advantage("basis", a)
+    labels = {k: (label, unit, scale) for _, items in AANNAMES_META for k, label, unit, _, _, scale, _ in items}
+    items = []
+    for k in SENSITIVE_COSTS + SENSITIVE_OPERATION:
+        label, unit, scale = labels[k]
+        ends = [{"waarde": shown_value, "voordeel": advantage("basis" if k in SENSITIVE_COSTS else f"{k}:{i}", variant)}
+                for i, (shown_value, variant) in enumerate(variants(a, k))]
+        if len(ends) == 2:
+            items.append({"key": k, "label": label, "eenheid": unit, "nu": getattr(a, k) * scale,
+                          "soort": "kosten" if k in SENSITIVE_COSTS else "bedrijfsvoering", "laag": ends[0], "hoog": ends[1],
+                          "bereik": abs(ends[1]["voordeel"] - ends[0]["voordeel"])})
+    items.sort(key=lambda item: item["bereik"], reverse=True)
+    data = {"modules": n, "voordeel": base, "stap": SENSITIVITY_STEP, "aannames": items}
+    CACHE.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data))
+    return data
 
 
 def example_day(results: list[dict], counts: list[int], years: list[int]) -> str | None:

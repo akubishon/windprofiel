@@ -97,6 +97,11 @@ lijn past beter bij wat het park zelf levert dan één station. Beabuorren houdt
 - **Uitkomst**: knikpunt, extra waterstof en per aantal modules de *maximale vaste kosten
   per module*: tot welk bedrag per unit opsplitsen per kilo goedkoper blijft dan één
   module. Dat is het getal om offertes aan te toetsen.
+- **Waarom wint of verliest N modules?** Kies een aantal modules: het verschil in kosten per
+  kilo met één module wordt exact uitgesplitst in meer waterstof, duurdere installatie,
+  stroom per kilo en stackvervanging. Een tornadografiek toont welke aanname dat verschil
+  het sterkst verschuift (elke aanname 25 % lager en hoger). Loont opsplitsen ook gratis
+  niet, dan staat er "loont niet" in plaats van een negatief bedrag.
 - **Een dag van dichtbij** vergelijkt het verbruik van 1 module en N modules per tien minuten.
   Kies een moment in de grafiek: zes kaarten rekenen dat moment met de echte getallen door,
   van KNMI-wind tot kilo's waterstof.

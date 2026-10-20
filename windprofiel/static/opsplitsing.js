@@ -375,24 +375,31 @@ function lineWithRange(target, rows, key, unit, digits) {
   $(target).replaceChildren(f.svg);
 }
 
+// "Loont niet": ook gratis extra modules maken de kilo niet goedkoper; dan nooit een negatief bedrag tonen.
+const pays = row => row.opsplitsen === "loont";
+const limitText = (row, digits = 2) => row.opsplitsen == null ? "–" : pays(row) ? nf(row.vaste_kosten_break_even_meur, digits) + " M€" : "loont niet";
+
 function fixedCostChart(rows, assumed) {
   const steps = rows.filter(r => r.vaste_kosten_break_even_meur != null);
   if (!steps.length) { $("capex-chart").textContent = "Kies minstens twee moduleaantallen."; return; }
-  const top = niceTop(Math.max(...steps.map(r => r.vaste_kosten_break_even_meur), assumed) * 1.1);
+  const top = niceTop(Math.max(...steps.map(r => pays(r) ? r.vaste_kosten_break_even_meur : 0), assumed) * 1.1);
   const f = frame(steps, top, {unit: "M€ per module"});
   const width = Math.min(24, f.band - 12);
   steps.forEach((row, i) => {
-    const value = Math.max(0, row.vaste_kosten_break_even_meur);
+    const value = pays(row) ? row.vaste_kosten_break_even_meur : 0;
     const x = f.cx(i) - width / 2, y = f.py(value), h = f.B - y, r = Math.min(4, h, width / 2);
     f.svg.append(el("path", {d: `M${x},${f.B} V${y + r} Q${x},${y} ${x + r},${y} H${x + width - r} Q${x + width},${y} ${x + width},${y + r} V${f.B} Z`,
-      fill: row.vaste_kosten_break_even_meur >= assumed ? COLORS.many : COLORS.one}));
-    f.svg.append(text(f.cx(i), y - 7, nf(row.vaste_kosten_break_even_meur, 2), {"text-anchor": "middle", class: "label"}));
+      fill: pays(row) && row.vaste_kosten_break_even_meur >= assumed ? COLORS.many : COLORS.one}));
+    f.svg.append(text(f.cx(i), y - 7, pays(row) ? nf(row.vaste_kosten_break_even_meur, 2) : "loont niet", {"text-anchor": "middle", class: "label", "font-size": pays(row) ? 11 : 9}));
   });
   f.svg.append(el("line", {x1: f.L, x2: f.W - f.R, y1: f.py(assumed), y2: f.py(assumed), stroke: COLORS.ink, "stroke-width": 1.5, "stroke-dasharray": "6 4"}),
     text(f.W - f.R, f.py(assumed) - 6, `aangenomen ${nf(assumed, 2)} M€`, {"text-anchor": "end", class: "label"}));
-  hover(f, steps, row => `<b>${label(row.modules)} van ${nf(row.module_mw)} MW</b><br>Lonend tot ${nf(row.vaste_kosten_break_even_meur, 2)} M€ vaste kosten per module
-    <br>${row.vaste_kosten_break_even_meur >= assumed ? "Met de aanname goedkoper" : "Met de aanname duurder"} dan ${label(rows[0].modules)} per kilo
-    <br>CAPEX nu ${nf(row.capex_meur)} M€`);
+  hover(f, steps, row => pays(row)
+    ? `<b>${label(row.modules)} van ${nf(row.module_mw)} MW</b><br>Lonend tot ${nf(row.vaste_kosten_break_even_meur, 2)} M€ vaste kosten per module
+      <br>${row.vaste_kosten_break_even_meur >= assumed ? "Met de aanname goedkoper" : "Met de aanname duurder"} dan ${label(rows[0].modules)} per kilo
+      <br>CAPEX nu ${nf(row.capex_meur)} M€`
+    : `<b>${label(row.modules)} van ${nf(row.module_mw)} MW</b><br>Loont niet: ook als extra modules niets kosten, is de kilo duurder dan met ${label(rows[0].modules)}.
+      <br>Waarom: zie "Waarom wint of verliest" hieronder.`);
   const legend = document.createElement("div");
   legend.className = "legend";
   legend.innerHTML = `<span>${swatch(COLORS.many)} Goedkoper dan ${label(rows[0].modules)}</span><span>${swatch(COLORS.one)} Duurder</span><span><span class="key dash"></span> Aangenomen vaste kosten</span>`;
@@ -432,7 +439,7 @@ function table(rows, net) {
     ["Stackwissel na (jaar)", r => nf(r.jaren_tot_stackwissel)],
     ["CAPEX (M€)", r => nf(r.capex_meur)],
     ["Maximale CAPEX (M€)", r => nf(r.capex_break_even_meur)],
-    ["Max. vaste kosten per module (M€)", r => r.vaste_kosten_break_even_meur == null ? "–" : nf(r.vaste_kosten_break_even_meur, 2)],
+    ["Max. vaste kosten per module", r => limitText(r)],
     ["Stilstand stackwissel (d/jaar)", r => nf(r.stackwissel_dagen)],
     ["Stroom (M€/jaar)", r => nf(r.stroom_meur_jaar, 2)],
     ["Stack (M€/jaar)", r => nf(r.stack_meur_jaar, 2)],
@@ -458,8 +465,11 @@ function headline(rows, result) {
   $("headline").innerHTML = `
     <div><span>Knikpunt</span><strong>${label(knee.modules)}</strong><p>Daarna levert een extra module minder dan 1 % waterstof op.</p></div>
     <div><span>Meer waterstof</span><strong>${pct(gain)}</strong><p>${label(knee.modules)} ten opzichte van ${label(base.modules)}: ${nf(knee.waterstof_t - base.waterstof_t, 0)} ton per jaar.</p></div>
-    <div><span>Vaste kosten per module</span><strong>${knee.vaste_kosten_break_even_meur == null ? "–" : "≤ " + nf(knee.vaste_kosten_break_even_meur, 2) + " M€"}</strong>
-      <p>${label(knee.modules)} ${knee.vaste_kosten_break_even_meur == null ? "is de vergelijkingsbasis" : `is per kilo goedkoper dan ${label(base.modules)} zolang een module hooguit dit aan vaste kosten heeft`}. Nu aangenomen: ${nf(result.aannames.vaste_kosten_module_meur, 2)} M€.</p></div>`;
+    <div><span>Vaste kosten per module</span><strong>${knee.opsplitsen == null ? "–" : pays(knee) ? "≤ " + nf(knee.vaste_kosten_break_even_meur, 2) + " M€" : "Loont niet"}</strong>
+      <p>${knee.opsplitsen == null ? `${label(knee.modules)} is de vergelijkingsbasis.`
+        : pays(knee) ? `${label(knee.modules)} is per kilo goedkoper dan ${label(base.modules)} zolang een module hooguit dit aan vaste kosten heeft.`
+        : `${label(knee.modules)} is per kilo duurder dan ${label(base.modules)}, ook als extra modules niets kosten. Zie de uitsplitsing hieronder.`}
+        Nu aangenomen: ${nf(result.aannames.vaste_kosten_module_meur, 2)} M€.</p></div>`;
   const years = result.jaren.join(", ");
   $("result-sub").textContent = `Besturing ‘${result.strategie}’, windjaren ${years}. Aanbod gemiddeld ${nf(Object.values(result.aanbod).reduce((s, a) => s + a.mwh, 0) / result.jaren.length / 1000, 0)} GWh per jaar.`;
 }
@@ -480,6 +490,7 @@ function render(result) {
   stepChart(rows);
   table(rows, net);
   renderSpeed(result);
+  setupWhy(result);
   const others = rows.slice(1).map(r => r.modules);
   $("day-panel").hidden = !others.length;
   if (others.length) {
@@ -821,4 +832,117 @@ function renderSpeed(result) {
       <li><b>Uitkomsten bewaren.</b> Dezelfde aannames nog eens? Dan komt de uitkomst direct uit de cache.</li>
     </ul>
     <p class="note">${timing}</p>`;
+}
+
+// ---------------------------------------------------------------- waarom wint N modules?
+
+const PARTS = [
+  ["meer_waterstof", "Meer waterstof", "De vaste kosten worden over meer kilo's verdeeld."],
+  ["duurdere_installatie", "Duurdere installatie", "Extra vaste kosten per module (gelijkrichter, transformator, besturing)."],
+  ["stroom_per_kilo", "Stroom per kilo", "Rendement bij de gekozen last, vaste BoP per module, warmhouden en opstartverlies."],
+  ["stackvervanging", "Stackvervanging", "Slijtage door bedrijfsuren en starts."],
+];
+let whyToken = 0;
+
+function setupWhy(result) {
+  const rows = result.rijen;
+  const select = $("why-n");
+  const others = rows.slice(1);
+  document.querySelector(".why").hidden = !others.length;
+  if (!others.length) return;
+  const cheapest = rows.reduce((a, b) => (b.lcoh_eur_kg ?? Infinity) < (a.lcoh_eur_kg ?? Infinity) ? b : a);
+  const chosen = cheapest === rows[0] ? others[0].modules : cheapest.modules;
+  select.replaceChildren(...others.map(r => new Option(label(r.modules), r.modules, false, r.modules === chosen)));
+  select.onchange = () => drawWhy(result, Number(select.value));
+  $("why-base").textContent = label(rows[0].modules);
+  drawWhy(result, chosen);
+}
+
+// Horizontale balken rond nul: rechts helpt het N modules, links niet.
+function divergingBars(items, {height = 30, labelWidth = 170, marker = null} = {}) {
+  const W = 520, L = labelWidth, R = 64, T = 22, H = T + items.length * height + 26;
+  // Ruimte naast de balken voor de waardelabels, zodat ze nooit over de namen links vallen.
+  const extent = Math.max(...items.flatMap(i => [Math.abs(i.from ?? 0), ...(i.segments || []).map(g => Math.abs(g.to)), Math.abs(i.to)]), 0.001) * 1.5;
+  const px = v => L + (v + extent) / (2 * extent) * (W - L - R);
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, "aria-hidden": "true"});
+  svg.append(el("line", {x1: px(0), x2: px(0), y1: T - 6, y2: H - 22, class: "axis"}),
+    text(px(0) - 6, T - 8, "← nadeel", {"text-anchor": "end"}), text(px(0) + 6, T - 8, "voordeel →"),
+    text(px(0), H - 6, "€/kg voor N modules", {"text-anchor": "middle"}));
+  if (marker != null) {
+    svg.append(el("line", {x1: px(marker), x2: px(marker), y1: T - 2, y2: H - 22, stroke: COLORS.ink, "stroke-dasharray": "4 3"}),
+      text(px(marker), H - 22 + 12, `nu ${nf(marker, 3)}`, {"text-anchor": marker < 0 ? "end" : "start", class: "label", "font-size": 10}));
+  }
+  items.forEach((item, i) => {
+    const y = T + i * height, from = item.from ?? 0;
+    const x1 = px(Math.min(from, item.to)), x2 = px(Math.max(from, item.to));
+    svg.append(text(L - 10, y + height / 2 + 4, item.label, {"text-anchor": "end", fill: COLORS.ink, "font-size": 12}));
+    for (const segment of item.segments || [{from, to: item.to, color: item.to >= from ? COLORS.many : COLORS.one}]) {
+      const a = px(Math.min(segment.from, segment.to)), b = px(Math.max(segment.from, segment.to));
+      svg.append(el("rect", {x: a, y: y + 7, width: Math.max(1.5, b - a), height: height - 14, rx: 3, fill: segment.color}));
+    }
+    if (item.value != null) svg.append(text(item.to >= from ? x2 + 6 : x1 - 6, y + height / 2 + 4, item.value, {"text-anchor": item.to >= from ? "start" : "end", class: "label"}));
+    const hit = el("rect", {x: 0, y, width: W, height, class: "hit"});
+    hit.addEventListener("mousemove", event => showTip(event, item.tip));
+    hit.addEventListener("mouseleave", hideTip);
+    svg.append(hit);
+  });
+  return svg;
+}
+
+function drawWhy(result, n) {
+  const rows = result.rijen, base = rows[0], row = rows.find(r => r.modules === n);
+  const parts = row.uitsplitsing;
+  for (const span of document.querySelectorAll(".why-n-label")) span.textContent = label(n);
+  const advantage = base.lcoh_eur_kg - row.lcoh_eur_kg;
+  $("why-total").innerHTML = `${label(base.modules)}: <b>${nf(base.lcoh_eur_kg, 3)} €/kg</b> · ${label(n)}: <b>${nf(row.lcoh_eur_kg, 3)} €/kg</b>.
+    ${advantage >= 0 ? `${label(n)} is <b>${nf(advantage, 3)} €/kg goedkoper</b>.` : `${label(n)} is <b>${nf(-advantage, 3)} €/kg duurder</b>.`}
+    De balken tellen precies op tot dat verschil.`;
+  const sign = v => (v > 0 ? "+" : v < 0 ? "−" : "") + nf(Math.abs(v), 3);
+  $("waterfall").replaceChildren(divergingBars(PARTS.map(([key, name, why]) => {
+    const value = -parts[key];   // voordeel voor N: lagere kosten per kilo is positief
+    const extra = key === "stroom_per_kilo" ? `<br>${nf(parts.kwh_per_kg[0], 1)} → ${nf(parts.kwh_per_kg[1], 1)} kWh per kg` : "";
+    return {label: name, to: value, value: sign(value),
+      tip: `<b>${name}</b><br>${why}${extra}<br>${value >= 0 ? "Voordeel" : "Nadeel"} voor ${label(n)}: ${nf(Math.abs(value), 3)} €/kg`};
+  })));
+  loadSensitivity(result, n);
+}
+
+async function loadSensitivity(result, n) {
+  const token = ++whyToken;
+  const status = $("tornado-status");
+  status.classList.remove("error");
+  status.innerHTML = '<span class="spinner"></span>Gevoeligheid berekenen… elke aanname wordt twee keer doorgerekend; de eerste keer duurt dit even.';
+  $("tornado").replaceChildren();
+  $("tornado-legend").innerHTML = "";
+  try {
+    const data = await post("/api/opsplitsing/gevoeligheid", {aannames: values(), strategie: result.strategie, jaren: result.jaren, n});
+    if (token !== whyToken) return;
+    status.innerHTML = "";
+    drawTornado(data, n);
+  } catch (error) {
+    if (token !== whyToken) return;
+    status.textContent = error.message;
+    status.classList.add("error");
+  }
+}
+
+function drawTornado(data, n) {
+  const items = data.aannames.slice(0, 10);
+  if (!items.length) { $("tornado").textContent = "Geen aannames om te variëren."; return; }
+  const base = data.voordeel;
+  const unit = i => i.eenheid && !i.eenheid.startsWith("%") ? " " + i.eenheid : i.eenheid === "%" ? " %" : "";
+  const value = (i, end) => nf(end.waarde, Math.abs(end.waarde) < 10 ? 2 : 0) + unit(i);
+  $("tornado").replaceChildren(divergingBars(items.map(i => ({
+    label: i.label, from: base, to: Math.abs(i.hoog.voordeel - base) >= Math.abs(i.laag.voordeel - base) ? i.hoog.voordeel : i.laag.voordeel,
+    segments: [{from: base, to: i.laag.voordeel, color: COLORS.one}, {from: base, to: i.hoog.voordeel, color: COLORS.many}],
+    tip: `<b>${i.label}</b> (nu ${nf(i.nu, Math.abs(i.nu) < 10 ? 2 : 0)}${unit(i)})
+      <div class="row">${swatch(COLORS.one)} ${value(i, i.laag)}: voordeel ${nf(i.laag.voordeel, 3)} €/kg</div>
+      <div class="row">${swatch(COLORS.many)} ${value(i, i.hoog)}: voordeel ${nf(i.hoog.voordeel, 3)} €/kg</div>
+      ${i.soort === "kosten" ? "Kostenaanname: zelfde simulatie, andere kosten." : "Bedrijfsvoering: opnieuw gesimuleerd."}`,
+  })), {marker: base}));
+  const top = items[0];
+  const signed = v => (v > 0 ? "+" : v < 0 ? "−" : "") + nf(Math.abs(v), 3);
+  $("tornado-legend").innerHTML = `<span>${swatch(COLORS.one)} Aanname 25 % lager</span><span>${swatch(COLORS.many)} 25 % hoger</span>`;
+  $("tornado-status").innerHTML = `<span class="heaviest">Het zwaarst weegt: <b>${top.label}</b>. Bij ${value(top, top.laag)} is het voordeel
+    ${signed(top.laag.voordeel)} €/kg, bij ${value(top, top.hoog)} ${signed(top.hoog.voordeel)} €/kg (nu ${signed(base)}).</span>`;
 }
