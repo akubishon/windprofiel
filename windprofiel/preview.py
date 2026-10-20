@@ -16,6 +16,8 @@ def standalone_html(profiles: dict) -> str:
     script = (static / "app.js").read_text()
     page = page.replace('<link rel="stylesheet" href="./style.css"><script src="./app.js" defer></script>',
                         "<style>" + styles + "</style>")
+    # De opsplitsingspagina draait alleen met de Python-server.
+    page = page.replace('\n      <a class="page-link" href="/opsplitsing">Elektrolyser opsplitsen: één grote of meerdere modules? →</a>', "")
     page = page.replace('</body>', '<script>window.WINDPROFIEL_PREVIEW=' + data + ';</script>\n<script>' + script + '</script>\n</body>')
     first_day = next(iter(profiles))
     return page.replace('value="2025-01-15"', 'value="' + first_day + '"')

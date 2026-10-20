@@ -10,6 +10,7 @@ class PreviewTests(unittest.TestCase):
         html = standalone_html(profiles)
         self.assertIn('value="2025-06-01"', html)
         self.assertIn("window.WINDPROFIEL_PREVIEW=", html)
+        self.assertNotIn("/opsplitsing", html)   # werkt alleen met de server
         self.assertNotIn('src="./app.js"', html)
         self.assertNotIn('href="./style.css"', html)
         self.assertNotIn("</script><script>danger</script>", html)
