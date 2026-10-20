@@ -76,7 +76,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin and urlsplit(origin).netloc != self.headers.get("Host"):
             self.json_response(403, {"error": "Gebruik de webapp voor deze aanvraag."})
             return
-        if path in ("/api/opsplitsing", "/api/opsplitsing/dag"):
+        if path in ("/api/opsplitsing", "/api/opsplitsing/dag", "/api/opsplitsing/gevoeligheid"):
             self.opsplitsing(path)
             return
         park_id = path.removeprefix("/api/curves/")
@@ -109,11 +109,17 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Onbekende besturing.")
             if not isinstance(counts, list) or not counts or any(n not in opsplitsing.MODULE_COUNTS for n in counts):
                 raise ValueError("Kies moduleaantallen uit de lijst.")
-            if path == "/api/opsplitsing":
+            if path in ("/api/opsplitsing", "/api/opsplitsing/gevoeligheid"):
                 years = body.get("jaren", opsplitsing.available_years())
                 if not isinstance(years, list) or not years or any(y not in opsplitsing.available_years() for y in years):
                     raise ValueError("Kies windjaren uit de lijst.")
-                self.json_response(200, opsplitsing.run(a, sorted(set(years)), counts, strategy))
+                if path == "/api/opsplitsing":
+                    self.json_response(200, opsplitsing.run(a, sorted(set(years)), counts, strategy))
+                else:
+                    n = body.get("n")
+                    if not isinstance(n, int) or isinstance(n, bool):
+                        raise ValueError("Kies een aantal modules om te vergelijken.")
+                    self.json_response(200, opsplitsing.sensitivity(a, sorted(set(years)), n, strategy))
             else:
                 day = date.fromisoformat(str(body.get("datum", "")))
                 if day.year not in opsplitsing.available_years():

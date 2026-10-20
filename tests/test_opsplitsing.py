@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 from windprofiel.application import load_curve
 
 from windprofiel.opsplitsing import (AANNAMES_META, TECHNOLOGIES, Aannames, break_even, combine_wind, desired_count, draw_mw, economics,
-                                     capex_eur, park_mw, parse_aannames, per_kw_eur, power_price, simulate, simulate_with_replacements,
+                                     capex_eur, park_mw, parse_aannames, per_kw_eur, power_price, sequential_loads, simulate,
+                                     simulate_with_replacements, variants,
                                      stack_kg_h, summarise, wind_steps)
 
 STILL = Aannames(onderhoud_dagen=0, storingen_per_jaar=0, startvertraging_min=0, min_aan_min=0, min_uit_min=0)
@@ -35,7 +36,8 @@ class OpsplitsingTests(unittest.TestCase):
         minimum = draw_mw(0.2 * 11, 11, a)
         self.assertEqual(desired_count(4 * minimum - 0.01, 4, 11, a, "samen", {}), 0)
         self.assertEqual(desired_count(60, 4, 11, a, "verdelen", {}), 4)
-        self.assertEqual(desired_count(draw_mw(11, 11, a) + minimum - 0.01, 4, 11, a, "bijschakelen", {}), 1)
+        # Een rest onder de minimumlast gaat niet verloren: er draait een tweede module, herverdeeld.
+        self.assertEqual(desired_count(draw_mw(11, 11, a) + minimum - 0.01, 4, 11, a, "bijschakelen", {}), 2)
         self.assertEqual(desired_count(0, 4, 11, a, "verdelen", {}), 0)
 
     def test_splitting_captures_low_wind_that_one_module_misses(self):
@@ -136,6 +138,47 @@ class OpsplitsingTests(unittest.TestCase):
         self.assertEqual(moments, [1, 2, 4])
         self.assertEqual(speeds, [6.0, 5.0, 2.0])
         self.assertEqual(sources, ["houtribdijk", "stavoren", "stavoren"])
+
+    def test_sequential_loads_lose_nothing_the_modules_can_absorb(self):
+        a = replace(TECHNOLOGIES["alkaline"][1], capaciteit_mw=25)
+        k = desired_count(15.0, 2, 12.5, a, "bijschakelen", {})
+        loads = sequential_loads(15.0, k, 12.5, a)
+        self.assertEqual(k, 2)
+        self.assertAlmostEqual(sum(draw_mw(x, 12.5, a) for x in loads), 15.0)
+        self.assertTrue(all(x >= a.minimumlast * 12.5 - 1e-9 for x in loads))
+
+    def test_sequential_switching_never_loses_to_one_module(self):
+        import math
+        a = replace(TECHNOLOGIES["alkaline"][1], capaciteit_mw=25, onderhoud_dagen=0, storingen_per_jaar=0, stackwissel_weken=0)
+        day = supply([24 * (1 + math.sin(i / 144 * 2 * math.pi)) for i in range(144 * 7)])
+        one = simulate(day, 1, a, "bijschakelen")["waterstof_t"]
+        self.assertGreaterEqual(simulate(day, 2, a, "bijschakelen")["waterstof_t"], one * 0.995)
+
+    def test_decomposition_adds_up_and_status_marks_losers(self):
+        flat = supply([3.0] * 300 + [30.0] * 300)
+        rows = [summarise([simulate(flat, n, STILL, "verdelen")], STILL) for n in (1, 4)]
+        break_even(rows, STILL)
+        parts = rows[1]["uitsplitsing"]
+        total = parts["meer_waterstof"] + parts["duurdere_installatie"] + parts["stroom_per_kilo"] + parts["stackvervanging"]
+        self.assertAlmostEqual(total, rows[1]["lcoh_eur_kg"] - rows[0]["lcoh_eur_kg"])
+        self.assertIsNone(rows[0]["opsplitsen"])
+        self.assertEqual(rows[1]["opsplitsen"], "loont" if rows[1]["vaste_kosten_break_even_meur"] >= 0.005 else "loont_niet")
+        # Ruim aanbod en geen voordeel: opsplitsen loont niet, ook niet gratis.
+        full = supply([48.4] * 600)
+        rows = [summarise([simulate(full, n, STILL, "verdelen")], STILL) for n in (1, 4)]
+        break_even(rows, STILL)
+        self.assertEqual(rows[1]["opsplitsen"], "loont_niet")
+
+    def test_sensitivity_varies_one_assumption_by_a_quarter_within_bounds(self):
+        (low, cheaper), (high, dearer) = variants(STILL, "stroomprijs_eur_mwh")
+        self.assertAlmostEqual(low, STILL.stroomprijs_eur_mwh * 0.75)
+        self.assertEqual(cheaper, replace(STILL, stroomprijs_eur_mwh=low))
+        self.assertEqual(dearer, replace(STILL, stroomprijs_eur_mwh=high))
+        (low, _), (high, _) = variants(STILL, "minimumlast")        # getoond in procenten: 10 → 7,5 en 12,5
+        self.assertAlmostEqual(low, 7.5)
+        self.assertAlmostEqual(high, 12.5)
+        self.assertEqual(variants(replace(STILL, standby=0), "standby"), [])   # nul valt niet te variëren
+        self.assertEqual(len(variants(STILL, "vaste_kosten_module_meur")), 2)
 
     def test_parse_aannames_uses_displayed_units_and_bounds(self):
         self.assertAlmostEqual(parse_aannames({"minimumlast": 30}).minimumlast, 0.30)
