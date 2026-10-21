@@ -332,7 +332,9 @@ function frame(rows, top, {bottom = 0, unit = ""} = {}) {
     svg.append(el("line", {x1: L, x2: W - R, y1: py(y), y2: py(y), class: i ? "grid" : "axis"}),
       text(L - 6, py(y) + 4, format(y), {"text-anchor": "end"}));
   }
-  rows.forEach((row, i) => svg.append(text(cx(i), B + 16, String(row.modules), {"text-anchor": "middle"})));
+  // Bij veel aantallen niet elk label: anders lopen ze door elkaar.
+  const every = Math.ceil(rows.length / 16);
+  rows.forEach((row, i) => (i % every === 0 || i === rows.length - 1) && svg.append(text(cx(i), B + 16, String(row.modules), {"text-anchor": "middle"})));
   svg.append(text(W - R, B + 34, "aantal modules", {"text-anchor": "end"}), text(L, T - 8, unit));
   return {svg, cx, py, band, L, R, T, B, W};
 }
@@ -458,7 +460,10 @@ function table(rows, net) {
 // ---------------------------------------------------------------- beste aantal modules
 
 const hours = value => nf(value, 0) + " uur";
-const signed = (value, digits, unit) => (value > 0 ? "+" : value < 0 ? "−" : "") + nf(Math.abs(value), digits) + unit;
+const signed = (value, digits, unit) => {
+  const rounded = Number(value.toFixed(digits));   // geen "−0" bij een afgerond nulverschil
+  return (rounded > 0 ? "+" : rounded < 0 ? "−" : "") + nf(Math.abs(rounded), digits) + unit;
+};
 
 function winner(rows) {
   const best = rows.find(r => r.beste) || rows[0];
@@ -490,7 +495,7 @@ function ladder(rows) {
   const average = Math.max(...rows.map(r => r.lcoh_eur_kg ?? 0));
   const known = steps.map(r => r.marginale_eur_kg).filter(v => v != null && v > 0);
   const top = niceTop(Math.min(Math.max(average * 1.3, ...known), average * 3));
-  const W = 640, L = 118, R = 150, T = 26, height = 40, H = T + steps.length * height + 24;
+  const W = 640, L = 118, R = 150, T = 26, height = steps.length > 12 ? 26 : 40, H = T + steps.length * height + 24;
   const px = v => L + Math.max(0, Math.min(v, top)) / top * (W - L - R);
   const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, "aria-hidden": "true"});
   const scale = niceScale(0, top);
@@ -505,12 +510,16 @@ function ladder(rows) {
     svg.append(text(L - 10, mid + 4, `${before.modules} → ${row.modules}`, {"text-anchor": "end", class: "on-light", "font-size": 13, "font-weight": row.beste ? 700 : 400}));
     const end = value == null ? px(top) : px(value);
     const w = Math.max(2, end - px(0)), r = Math.min(4, w);
-    svg.append(el("path", {d: `M${px(0)},${y + 9} H${px(0) + w - r} Q${px(0) + w},${y + 9} ${px(0) + w},${y + 9 + r} V${y + height - 9 - r} Q${px(0) + w},${y + height - 9} ${px(0) + w - r},${y + height - 9} H${px(0)} Z`,
+    const pad = height > 30 ? 9 : 5;
+    svg.append(el("path", {d: `M${px(0)},${y + pad} H${px(0) + w - r} Q${px(0) + w},${y + pad} ${px(0) + w},${y + pad + r} V${y + height - pad - r} Q${px(0) + w},${y + height - pad} ${px(0) + w - r},${y + height - pad} H${px(0)} Z`,
       fill: row.stap_loont ? COLORS.many : "#a9b6c2"}));
     const mark = px(before.lcoh_eur_kg);
     svg.append(el("line", {x1: mark, x2: mark, y1: y + 4, y2: y + height - 4, stroke: COLORS.ink, "stroke-width": 2}));
     const shownValue = value == null ? "geen extra H₂" : value > top ? `> ${nf(top, 0)} €/kg` : nf(value, 2) + " €/kg";
-    svg.append(text(Math.max(end, mark) + 6, mid + 4, shownValue, {class: "label"}),
+    // Lange balk: het getal binnen de balk, zodat het niet over de kolom rechts valt.
+    const inside = Math.max(end, mark) + 76 > W - R;
+    svg.append(inside ? text(end - 6, mid + 4, shownValue, {"text-anchor": "end", class: "on-light", "font-weight": 600})
+      : text(Math.max(end, mark) + 6, mid + 4, shownValue, {class: "label"}),
       text(W - R + 10, mid + 4, `${signed(row.extra_productie_uur, 0, " uur")} · ${signed(row.extra_waterstof_t, 0, " t")}`, {class: "on-light", "font-size": 11}));
     const hit = el("rect", {x: 0, y, width: W, height, class: "hit"});
     hit.addEventListener("mousemove", event => showTip(event, `<b>${before.modules} → ${row.modules} modules</b>
@@ -615,6 +624,95 @@ function loadScenario() {
   remember();
   drawExplainers();
   $("form").requestSubmit();
+}
+
+// ---------------------------------------------------------------- opgeslagen scenario's
+
+let shownSaved = null;
+let savedList = [];
+
+async function loadSaved() {
+  $("saved-status").textContent = "";
+  try {
+    const response = await fetch("/api/opsplitsing/scenarios");
+    if (!response.ok) throw new Error();
+    savedList = (await response.json()).scenarios;
+    drawSaved(savedList);
+  } catch {
+    $("saved-status").textContent = "De lijst met opgeslagen scenario's is niet te laden.";
+  }
+}
+
+const span = counts => counts.length > 2 && counts.every((n, i) => !i || n === counts[i - 1] + 1)
+  ? `${counts[0]}–${counts[counts.length - 1]}` : counts.join(", ");
+
+function drawSaved(list) {
+  const target = $("saved-list");
+  if (!list.length) {
+    target.innerHTML = `<div class="saved-empty"><p class="note">Nog geen opgeslagen scenario's. Draai lokaal, in de map van het project:</p>
+      <pre>python3 -m windprofiel.scenarios                 # PEM, alkaline en alkaline hoog × 3 besturingen, 1–16 modules
+python3 -m windprofiel.scenarios --modules 1-44 --technologie alkaline_hoog --strategie verdelen --jaren 2025</pre>
+      <p class="note">Klik daarna op "Lijst vernieuwen".</p></div>`;
+    return;
+  }
+  const table = document.createElement("table");
+  table.innerHTML = `<caption class="note">${list.length} scenario${list.length === 1 ? "" : "'s"}, nieuwste eerst. Goedkoopst = laagste LCOH.</caption>
+    <thead><tr><th scope="col">Scenario</th><th scope="col">Modules</th><th scope="col">Goedkoopst</th>
+    <th scope="col">LCOH 1 module → goedkoopst</th><th scope="col">Meer waterstof</th><th scope="col">Gemaakt</th><th scope="col"></th></tr></thead>`;
+  const body = document.createElement("tbody");
+  for (const item of list) {
+    const tr = document.createElement("tr");
+    tr.classList.toggle("shown", item.id === shownSaved);
+    const cells = [item.naam, span(item.modules), label(item.beste.modules),
+      `${nf(item.een_module.lcoh_eur_kg, 2)} → ${nf(item.beste.lcoh_eur_kg, 2)} €/kg`,
+      pct(item.beste.waterstof_t / item.een_module.waterstof_t - 1),
+      new Date(item.gemaakt).toLocaleString("nl-NL", {dateStyle: "short", timeStyle: "short", timeZone: "Europe/Amsterdam"})];
+    cells.forEach((value, i) => {
+      const td = document.createElement("td");
+      td.textContent = value;   // namen komen uit bestanden: als tekst, nooit als HTML
+      if (i === 2) td.className = "best-n";
+      tr.append(td);
+    });
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "text-button";
+    button.textContent = "Toon";
+    button.addEventListener("click", () => showSaved(item.id));
+    const td = document.createElement("td");
+    td.append(button);
+    tr.append(td);
+    body.append(tr);
+  }
+  table.append(body);
+  target.replaceChildren(table);
+}
+
+async function showSaved(id) {
+  const status = $("saved-status");
+  status.classList.remove("error");
+  status.innerHTML = '<span class="spinner"></span>Scenario laden…';
+  try {
+    const response = await fetch("/api/opsplitsing/scenarios/" + encodeURIComponent(id));
+    const stored = await response.json();
+    if (!response.ok) throw new Error(stored.error || "Scenario niet gevonden.");
+    const result = stored.resultaat;
+    // De aannames staan opgeslagen in rekeneenheden (0,4); het formulier toont ze geschaald (40 %).
+    const scales = Object.fromEntries(meta.groepen.flatMap(g => g.velden.map(v => [v.key, v.schaal])));
+    const aannames = Object.fromEntries(Object.entries(result.aannames).filter(([key]) => key in scales)
+      .map(([key, value]) => [key, Math.round(value * scales[key] * 1e6) / 1e6]));
+    buildForm({technologie: stored.technologie, strategie: result.strategie, jaren: result.jaren, aannames,
+      modules: result.rijen.map(r => r.modules).filter(n => meta.modules.includes(n))});
+    remember();
+    drawExplainers();
+    render({...result, uit_cache: true});
+    shownSaved = id;
+    status.textContent = `Getoond: ${stored.naam}.`;
+    drawSaved(savedList);
+    $("results").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start"});
+  } catch (error) {
+    status.textContent = error.message;
+    status.classList.add("error");
+  }
 }
 
 function headline(rows, result) {
@@ -832,6 +930,8 @@ async function start() {
   });
   $("day-run").addEventListener("click", runDay);
   $("scenario-run").addEventListener("click", loadScenario);
+  $("saved-refresh").addEventListener("click", loadSaved);
+  loadSaved();
   $("step").addEventListener("input", event => selectStep(Number(event.target.value)));
   $("day-count").addEventListener("change", runDay);
   addEventListener("scroll", hideTip, {passive: true});

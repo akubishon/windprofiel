@@ -107,6 +107,17 @@
         </form>
       </section>
 
+      <section class="panel" aria-labelledby="saved-title" id="saved">
+        <div class="step-heading"><span class="step-number">↺</span><div>
+          <h2 id="saved-title">Opgeslagen scenario's</h2>
+          <p>Uitkomsten die lokaal in bulk zijn doorgerekend met <code>python3 -m windprofiel.scenarios</code> en in de map
+            <code>scenarios/</code> staan. "Toon" laat ze hieronder zien zonder opnieuw te rekenen en zet de aannames in stap 2 erop.</p>
+        </div></div>
+        <div class="saved-actions"><button class="secondary-button" type="button" id="saved-refresh">Lijst vernieuwen</button>
+          <span id="saved-status" class="note" role="status" aria-live="polite"></span></div>
+        <div id="saved-list" class="table-scroll"></div>
+      </section>
+
       <section class="panel" aria-labelledby="result-title" id="results" hidden>
         <div class="step-heading"><span class="step-number">3</span><div>
           <h2 id="result-title">Uitkomst</h2>

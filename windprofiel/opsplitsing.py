@@ -42,7 +42,8 @@ FIRST_YEAR = 2022   # eerste volledige jaar met Windpark Fryslân in bedrijf
 # weinig terwijl Houtribdijk wel wind ziet, dan past de hoogste lijn beter bij de productie van Fryslân.
 # Wynpark Beabuorren houdt alleen Stavoren, het dichtstbijzijnde station.
 STATIONS = {"houtribdijk": ("Houtribdijk", "0-20000-0-06258"), "stavoren": ("Stavoren", "0-20000-0-06267")}
-MODULE_COUNTS = [1, 2, 3, 4, 5, 6, 8, 10, 11, 16]
+MODULE_COUNTS = [1, 2, 3, 4, 5, 6, 8, 10, 11, 16]   # keuzelijst op de pagina
+MAX_MODULES = 64                                     # bovengrens voor opgeslagen scenario's en aanvragen
 STRATEGIES = {
     "verdelen": "Per tijdstap het aantal modules dat de meeste waterstof geeft, last gelijk verdeeld.",
     "bijschakelen": "Modules één voor één bijschakelen; hooguit één module in deellast.",
@@ -715,7 +716,7 @@ def variants(a: Aannames, key: str) -> list[tuple[float, Aannames]]:
 
 def sensitivity(a: Aannames, years: list[int], n: int, strategy: str, workers: int | None = None) -> dict:
     """Hoe het voordeel van n modules boven één module (€/kg) verschuift als elke aanname 25 % verandert."""
-    if n <= 1 or n not in MODULE_COUNTS or strategy not in STRATEGIES or not years:
+    if not 1 < n <= MAX_MODULES or strategy not in STRATEGIES or not years:
         raise ValueError("Kies een aantal modules groter dan 1, een besturing en minstens één windjaar.")
     supplies = {year: supply_year(year) for year in years}
     key = hashlib.sha256(json.dumps([MODEL_VERSION, "gevoeligheid", asdict(a), years, n, strategy, SENSITIVITY_STEP,

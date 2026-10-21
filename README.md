@@ -139,6 +139,27 @@ python3 -m windprofiel.opsplitsing --technologie alkaline       # standaard: pem
 python3 -m windprofiel.opsplitsing --aannames mijn-offerte.json # bijvoorbeeld {"minimumlast": 10, "vaste_kosten_module_meur": 0.5}
 ```
 
+### Alle moduleaantallen in bulk doorrekenen en op de pagina tonen
+
+`windprofiel.scenarios` rekent elk moduleaantal in een bereik door en bewaart de uitkomst als
+JSON in `scenarios/`, plus alles onder elkaar in `scenarios/overzicht.csv`. Op de
+opsplitsingspagina staan ze onder **Opgeslagen scenario's**; **Toon** laat de volledige
+uitkomst zien zonder opnieuw te rekenen en zet de aannames in het formulier.
+
+```sh
+python3 -m windprofiel.scenarios                    # 3 technologieën × 3 besturingen, 1–16 modules, alle windjaren
+python3 -m windprofiel.scenarios --technologie alkaline_hoog --strategie verdelen --jaren 2025 --modules 1-44
+python3 -m windprofiel.scenarios --modules 1-6,8,10,12 --aannames mijn-offerte.json --naam "Offerte X"
+python3 -m windprofiel.scenarios --lijst            # wat er is opgeslagen
+python3 -m windprofiel.scenarios --verwijder offerte-x-pem-verdelen
+```
+
+Dezelfde naam opnieuw draaien overschrijft het scenario. Een rekening die al in
+`.cache/opsplitsing/` staat, komt direct uit de cache. Met 4 processen duurt 1–16 modules voor
+één windjaar ongeveer 13 s; grote aantallen duren langer, omdat elke module per tien minuten
+wordt gevolgd (44 modules: ongeveer 10 s per windjaar voor die ene configuratie). `scenarios/` staat in `.gitignore`; haal die
+regel weg als je de uitkomsten wilt meecommitten.
+
 Beperkingen: tienminutengemiddelden verbergen kortere schommelingen; de rendementscurve
 is lineair met een Faradayterm; degradatie telt starts en lastwisselingen als extra
 bedrijfsuren, niet als functie van de last; stackvervanging is een continue benadering.
