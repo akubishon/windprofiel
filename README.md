@@ -102,12 +102,14 @@ lijn past beter bij wat het park zelf levert dan één station. Beabuorren houdt
   stroom per kilo en stackvervanging. Een tornadografiek toont welke aanname dat verschil
   het sterkst verschuift (elke aanname 25 % lager en hoger). Loont opsplitsen ook gratis
   niet, dan staat er "loont niet" in plaats van een negatief bedrag.
-- **Beste aantal modules, stap voor stap**: per extra module wat de extra kilo's kosten,
-  naast de gemiddelde kosten per kilo ervoor. Zijn de extra kilo's goedkoper, dan zakt het
-  gemiddelde en loont de stap. Ook het aantal uren per jaar waarin waterstof wordt gemaakt.
+- **Laagste berekende kostprijs, stap voor stap**: per volgende gekozen configuratie wat de extra kilo's kosten,
+  naast de gemiddelde kosten per kilo ervoor. De stapgrafiek blijft zichtbaar, met daarnaast de
+  LCOH op drie decimalen, de verandering in cent/kg en het verschil met de laagste doorgerekende kostprijs.
+  Een daling tegenover de vorige configuratie betekent niet automatisch de laagste totale kostprijs.
+  De open stappentabel behoudt extra tonnen, productie-uren, jaarkosten en LCOH vóór en na elke stap.
   De **omslagkaart** toont het goedkoopste aantal bij elke combinatie van minimumlast
   (10–50 %) en vaste kosten per module (0–1,5 M€).
-- **Scenario "Wanneer wint 4 modules?"**: alkaline met 40 % minimumlast en 0,3 M€ vaste
+- **Scenario "Hoge minimumlast en lage modulekosten"**: alkaline met 40 % minimumlast en 0,3 M€ vaste
   kosten per module. Met de standaardwaarden wint bijna altijd 2: bij 10–20 % minimumlast
   vangt één grote module de zwakke wind al grotendeels, en 1 M€ per extra unit is veel.
   Met een hoge minimumlast staat één module van 44 MW onder ~18 MW stil, terwijl een
@@ -138,6 +140,14 @@ python3 -m windprofiel.opsplitsing                              # schrijft uitvo
 python3 -m windprofiel.opsplitsing --technologie alkaline       # standaard: pem
 python3 -m windprofiel.opsplitsing --aannames mijn-offerte.json # bijvoorbeeld {"minimumlast": 10, "vaste_kosten_module_meur": 0.5}
 ```
+
+### Berekeningsbasis en controleerbare export
+
+De uitkomst toont de gebruikte aannames en hun herkomst, windjaren, gelijk totaalvermogen en één vaste, herhaalbare storingstrekking per module en windjaar. Jaarspreiding is geen betrouwbaarheidsinterval; meerdere storingstrekkingen zijn niet als onzekerheidsband berekend. De markering ‘laagste berekend’ geldt binnen de getoonde instellingen en geselecteerde configuraties.
+
+De CSV-download bewaart alle oorspronkelijke rijvelden, ongeronde stapverschillen en aannames in rekeneenheden (puntkomma's en kommawaarden). Contextkolommen beginnen met `berekening.`, verschillen met `stap.` en aannames met `aanname.`. JSON bevat ook de volledige jaaruitkomsten en veldmetadata. Geen of negatieve extra productie krijgt geen misleidende prijs per extra kilo; negatieve kosten en productieverschillen blijven zichtbaar. Extra decimalen zijn voor controle, niet een maat voor voorspellingszekerheid.
+
+Vervolgdiagrammen, gevoeligheid en dagvoorbeelden gebruiken de aannames van de getoonde berekening, ook na wijzigingen in het formulier. Een melding geeft aan wanneer de invoer nog niet is herberekend. De Pythonberekeningen en standaardwaarden blijven gelijk.
 
 ### Alle moduleaantallen in bulk doorrekenen en op de pagina tonen
 
@@ -203,6 +213,7 @@ ze nieuwe metingen krijgen.
 
 ```sh
 python3 -m unittest discover -s tests -v   # unit-tests, zonder netwerk of sleutel
+node --test tests/opsplitsing-presentation.test.mjs  # presentatie en exports (Node.js 18+)
 python3 -m windprofiel.knmi                # controleert echte KNMI-toegang
 node --check windprofiel/static/app.js     # JavaScript-syntax
 node --check windprofiel/static/opsplitsing.js
