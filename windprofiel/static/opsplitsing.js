@@ -4,7 +4,7 @@
 const $ = id => document.getElementById(id);
 const SVG = "http://www.w3.org/2000/svg";
 const STORE = "opsplitsing-v2";   // v2: technologiekeuze en EU-standaardwaarden
-const COLORS = {one: "#22528F", many: "#0094C6", wash: "#C3E4F2", ink: "#0C2340", muted: "#465970"};
+const COLORS = {one: "#22528F", many: "#0094C6", accent: "#00A6DE", wash: "#C3E4F2", ink: "#0C2340", muted: "#465970"};
 const nf = (value, digits = 1) => value == null || !isFinite(value) ? "–"
   : new Intl.NumberFormat("nl-NL", {minimumFractionDigits: digits, maximumFractionDigits: digits}).format(value);
 const pct = (value, digits = 1) => (value > 0 ? "+" : "") + nf(value * 100, digits) + " %";
@@ -142,6 +142,7 @@ function buildForm(state) {
     labelNode.querySelector("input").checked = chosen.includes(value);
     return labelNode;
   }));
+  $("tech-note").textContent = meta.technologieen[tech].toelichting || "";
   checks("years", "jaar", meta.jaren, state.jaren?.length ? state.jaren : meta.jaren, String);
   checks("counts", "modules", meta.modules, state.modules?.length ? state.modules : meta.modules, String);
   const opened = loadOpen();
@@ -331,7 +332,9 @@ function frame(rows, top, {bottom = 0, unit = ""} = {}) {
     svg.append(el("line", {x1: L, x2: W - R, y1: py(y), y2: py(y), class: i ? "grid" : "axis"}),
       text(L - 6, py(y) + 4, format(y), {"text-anchor": "end"}));
   }
-  rows.forEach((row, i) => svg.append(text(cx(i), B + 16, String(row.modules), {"text-anchor": "middle"})));
+  // Bij veel aantallen niet elk label: anders lopen ze door elkaar.
+  const every = Math.ceil(rows.length / 16);
+  rows.forEach((row, i) => (i % every === 0 || i === rows.length - 1) && svg.append(text(cx(i), B + 16, String(row.modules), {"text-anchor": "middle"})));
   svg.append(text(W - R, B + 34, "aantal modules", {"text-anchor": "end"}), text(L, T - 8, unit));
   return {svg, cx, py, band, L, R, T, B, W};
 }
@@ -435,6 +438,7 @@ function table(rows, net) {
     ["Waterstof (t/jaar)", r => nf(r.waterstof_t, 0)],
     ["Benutting aanbod", r => nf(r.benutting * 100) + " %"],
     ["Bedrijfsuren per module", r => nf(r.bedrijfsuren_gem, 0)],
+    ["Uren met waterstof", r => nf(r.productie_uur, 0)],
     ["Starts per module (warm / koud)", r => `${nf(r.starts_warm_per_module, 0)} / ${nf(r.starts_koud_per_module, 0)}`],
     ["Stackwissel na (jaar)", r => nf(r.jaren_tot_stackwissel)],
     ["CAPEX (M€)", r => nf(r.capex_meur)],
@@ -451,6 +455,278 @@ function table(rows, net) {
   const head = `<caption class="note">Gemiddelden over de gekozen windjaren. De vetgedrukte rij heeft de laagste LCOH.</caption><thead><tr>${columns.map(c => `<th scope="col">${c[0]}</th>`).join("")}</tr></thead>`;
   const body = rows.map(r => `<tr${r === best ? ' class="best"' : ""}>${columns.map(c => `<td>${c[1](r)}</td>`).join("")}</tr>`).join("");
   $("table").innerHTML = head + `<tbody>${body}</tbody>`;
+}
+
+// ---------------------------------------------------------------- beste aantal modules
+
+const hours = value => nf(value, 0) + " uur";
+const signed = (value, digits, unit) => {
+  const rounded = Number(value.toFixed(digits));   // geen "−0" bij een afgerond nulverschil
+  return (rounded > 0 ? "+" : rounded < 0 ? "−" : "") + nf(Math.abs(rounded), digits) + unit;
+};
+
+function winner(rows) {
+  const best = rows.find(r => r.beste) || rows[0];
+  const base = rows[0];
+  const index = rows.indexOf(best);
+  const next = rows[index + 1];
+  $("winner-title").textContent = rows.length < 2 ? `Kostprijs per kilo waterstof met ${label(best.modules)}`
+    : best === base ? `Opsplitsen loont hier niet: ${label(base.modules)} geeft de laagste kostprijs per kilo`
+    : `${label(best.modules)} geeft de laagste kostprijs per kilo waterstof`;
+  // Twee tegels naast elkaar: zo is te zien dat de investering stijgt, terwijl de kilo goedkoper wordt.
+  const compare = best === base ? (next ? [base, next] : [base]) : [base, best];
+  const tile = row => `<div class="${row === best ? "win" : ""}">
+      <span>${label(row.modules)} van ${nf(row.module_mw)} MW${row === best ? " · laagste kostprijs" : ""}</span>
+      <strong>${nf(row.lcoh_eur_kg, 2)} <small>€ per kilo waterstof</small></strong>
+      <dl><dt>Investering</dt><dd>${nf(row.capex_meur, 1)} M€</dd>
+        <dt>Kosten per jaar</dt><dd>${nf(row.kosten_meur_jaar, 1)} M€</dd>
+        <dt>Waterstof per jaar</dt><dd>${nf(row.waterstof_t, 0)} ton</dd>
+        <dt>Uren met waterstof</dt><dd>${hours(row.productie_uur)}</dd></dl></div>`;
+  $("winner-compare").innerHTML = compare.map(tile).join("");
+  const parts = [];
+  if (best !== base) {
+    parts.push(`${label(best.modules)} kost <b>${nf(best.capex_meur - base.capex_meur, 1)} M€ meer</b> om te bouwen dan ${label(base.modules)},
+      maar maakt <b>${nf(best.waterstof_t - base.waterstof_t, 0)} ton per jaar meer</b> waterstof, omdat de kleine modules vaker draaien
+      (${hours(best.productie_uur)} in plaats van ${hours(base.productie_uur)}). Verdeeld over al die extra kilo's is elke kilo
+      <b>${nf(base.lcoh_eur_kg - best.lcoh_eur_kg, 2)} € goedkoper</b>.`);
+    if (best.marginale_eur_kg != null) parts.push(`De laatste stap naar ${label(best.modules)} levert kilo's van ${nf(best.marginale_eur_kg, 2)} €/kg:
+      goedkoper dan het gemiddelde van ${nf(rows[index - 1].lcoh_eur_kg, 2)} €/kg, dus het gemiddelde zakt.`);
+  } else if (next) {
+    parts.push(`${label(next.modules)} maakt ${nf(next.waterstof_t - base.waterstof_t, 0)} ton per jaar meer waterstof, maar dat weegt niet op
+      tegen de ${nf(next.kosten_meur_jaar - base.kosten_meur_jaar, 2)} M€ extra kosten per jaar.`);
+  }
+  if (next && best !== base) parts.push(next.marginale_eur_kg != null
+    ? `Naar ${label(next.modules)} kosten de extra kilo's ${nf(next.marginale_eur_kg, 2)} €/kg: duurder dan ${nf(best.lcoh_eur_kg, 2)} €/kg, dus daar stopt het.`
+    : `${label(next.modules)} levert geen extra waterstof meer op.`);
+  $("winner-text").innerHTML = parts.join(" ");
+  ladder(rows);
+}
+
+// Horizontale trap: per stap de kosten van de extra kilo's, met een streepje op het gemiddelde ervoor.
+function ladder(rows) {
+  const steps = rows.slice(1);
+  if (!steps.length) { $("ladder").textContent = "Kies minstens twee moduleaantallen."; $("ladder-legend").innerHTML = ""; return; }
+  const average = Math.max(...rows.map(r => r.lcoh_eur_kg ?? 0));
+  const known = steps.map(r => r.marginale_eur_kg).filter(v => v != null && v > 0);
+  const top = niceTop(Math.min(Math.max(average * 1.3, ...known), average * 3));
+  const W = 640, L = 118, R = 150, T = 26, height = steps.length > 12 ? 26 : 40, H = T + steps.length * height + 24;
+  const px = v => L + Math.max(0, Math.min(v, top)) / top * (W - L - R);
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, "aria-hidden": "true"});
+  const scale = niceScale(0, top);
+  for (let v = 0; v <= top + 1e-9; v += scale.step) {
+    svg.append(el("line", {x1: px(v), x2: px(v), y1: T - 6, y2: H - 22, class: v ? "grid" : "axis"}),
+      text(px(v), H - 6, nf(v, 0), {"text-anchor": "middle"}));
+  }
+  svg.append(text(W - R + 10, H - 6, "€/kg"), text(W - R + 10, T - 10, "meer waterstof"));
+  steps.forEach((row, i) => {
+    const before = rows[i], y = T + i * height, mid = y + height / 2;
+    const value = row.marginale_eur_kg;
+    svg.append(text(L - 10, mid + 4, `${before.modules} → ${row.modules}`, {"text-anchor": "end", class: "on-light", "font-size": 13, "font-weight": row.beste ? 700 : 400}));
+    const end = value == null ? px(top) : px(value);
+    const w = Math.max(2, end - px(0)), r = Math.min(4, w);
+    const pad = height > 30 ? 9 : 5;
+    svg.append(el("path", {d: `M${px(0)},${y + pad} H${px(0) + w - r} Q${px(0) + w},${y + pad} ${px(0) + w},${y + pad + r} V${y + height - pad - r} Q${px(0) + w},${y + height - pad} ${px(0) + w - r},${y + height - pad} H${px(0)} Z`,
+      fill: row.stap_loont ? COLORS.many : "#a9b6c2"}));
+    const mark = px(before.lcoh_eur_kg);
+    svg.append(el("line", {x1: mark, x2: mark, y1: y + 4, y2: y + height - 4, stroke: COLORS.ink, "stroke-width": 2}));
+    const shownValue = value == null ? "geen extra H₂" : value > top ? `> ${nf(top, 0)} €/kg` : nf(value, 2) + " €/kg";
+    // Lange balk: het getal binnen de balk, zodat het niet over de kolom rechts valt.
+    const inside = Math.max(end, mark) + 76 > W - R;
+    svg.append(inside ? text(end - 6, mid + 4, shownValue, {"text-anchor": "end", class: "on-light", "font-weight": 600})
+      : text(Math.max(end, mark) + 6, mid + 4, shownValue, {class: "label"}),
+      text(W - R + 10, mid + 4, `${signed(row.extra_productie_uur, 0, " uur")} · ${signed(row.extra_waterstof_t, 0, " t")}`, {class: "on-light", "font-size": 11}));
+    const hit = el("rect", {x: 0, y, width: W, height, class: "hit"});
+    hit.addEventListener("mousemove", event => showTip(event, `<b>${before.modules} → ${row.modules} modules</b>
+      <br>${signed(row.extra_productie_uur, 0, " uur")} per jaar met waterstofproductie
+      <br>${signed(row.extra_waterstof_t, 1, " ton")} waterstof per jaar
+      <br>${signed(row.extra_kosten_meur_jaar, 2, " M€")} kosten per jaar
+      <br>Extra kilo's kosten ${value == null ? "–" : nf(value, 2) + " €/kg"}, gemiddeld was ${nf(before.lcoh_eur_kg, 2)} €/kg
+      <br><b>${row.stap_loont ? `Loont: LCOH ${nf(before.lcoh_eur_kg, 2)} → ${nf(row.lcoh_eur_kg, 2)} €/kg` : `Loont niet: LCOH ${nf(before.lcoh_eur_kg, 2)} → ${nf(row.lcoh_eur_kg, 2)} €/kg`}</b>`));
+    hit.addEventListener("mouseleave", hideTip);
+    svg.append(hit);
+  });
+  $("ladder-legend").innerHTML = `<span><span class="key cost"></span> Stap loont</span><span><span class="key cost-no"></span> Stap loont niet</span>
+    <span><span class="key tick"></span> Gemiddelde kosten per kilo vóór de stap</span>`;
+  $("ladder").replaceChildren(svg);
+}
+
+// ---------------------------------------------------------------- omslagkaart
+
+let mapToken = 0;
+
+function setupMap(result) {
+  mapToken++;
+  $("switch-map").replaceChildren();
+  $("map-status").textContent = result.rijen.length > 1 ? "" : "Kies minstens twee moduleaantallen.";
+  $("map-run").disabled = result.rijen.length < 2;
+  $("map-run").onclick = () => loadMap(result);
+}
+
+async function loadMap(result) {
+  const token = ++mapToken;
+  $("map-run").disabled = true;
+  $("map-status").innerHTML = '<span class="spinner"></span>Omslagkaart berekenen…';
+  try {
+    const data = await post("/api/opsplitsing/omslagkaart", {aannames: values(), strategie: result.strategie, jaren: result.jaren,
+      modules: result.rijen.map(r => r.modules)});
+    if (token !== mapToken) return;
+    $("map-status").textContent = "";
+    drawMap(data);
+  } catch (error) {
+    if (token !== mapToken) return;
+    $("map-status").textContent = error.message;
+  } finally {
+    if (token === mapToken) $("map-run").disabled = false;
+  }
+}
+
+// Eén tint van licht naar donker: meer modules is donkerder. Het getal staat altijd in de cel.
+function ramp(t) {
+  const a = [0xC3, 0xE4, 0xF2], b = [0x0C, 0x23, 0x40];
+  return "#" + a.map((c, i) => Math.round(c + (b[i] - c) * t).toString(16).padStart(2, "0")).join("");
+}
+
+function drawMap(data) {
+  const rows = data.minimumlast.length, cols = data.vaste_kosten_meur.length;
+  const W = 520, L = 64, R = 10, T = 14, B = 80, cw = (W - L - R) / cols, ch = 38, H = T + rows * ch + B;
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, "aria-hidden": "true"});
+  const tone = n => data.modules.length > 1 ? data.modules.indexOf(n) / (data.modules.length - 1) : 0;
+  // Hoogste minimumlast bovenaan.
+  const cy = i => T + (rows - 1 - i) * ch;
+  data.minimumlast.forEach((m, i) => {
+    svg.append(text(L - 8, cy(i) + ch / 2 + 4, nf(m, 0) + " %", {"text-anchor": "end"}));
+    data.vaste_kosten_meur.forEach((f, j) => {
+      const cell = data.cellen[i][j], x = L + j * cw, y = cy(i);
+      if (!cell) { svg.append(el("rect", {x: x + 1, y: y + 1, width: cw - 2, height: ch - 2, fill: "#eef1f4"})); return; }
+      const t = tone(cell.beste);
+      svg.append(el("rect", {x: x + 1, y: y + 1, width: cw - 2, height: ch - 2, rx: 3, fill: ramp(t)}),
+        text(x + cw / 2, y + ch / 2 + 5, String(cell.beste), {"text-anchor": "middle", "font-size": 14, "font-weight": 700, class: t > 0.45 ? "on-dark" : "on-light"}));
+      const hit = el("rect", {x, y, width: cw, height: ch, class: "hit"});
+      hit.addEventListener("mousemove", event => showTip(event, `<b>Minimumlast ${nf(m, 0)} %, vaste kosten ${nf(f, 2)} M€ per module</b>
+        <br>Laagste kostprijs per kilo: ${label(cell.beste)}, ${nf(cell.lcoh_eur_kg, 2)} €/kg<br>${label(data.modules[0])}: ${nf(cell.lcoh_een_eur_kg, 2)} €/kg`));
+      hit.addEventListener("mouseleave", hideTip);
+      svg.append(hit);
+    });
+  });
+  data.vaste_kosten_meur.forEach((f, j) => svg.append(text(L + j * cw + cw / 2, T + rows * ch + 16, nf(f, 2), {"text-anchor": "middle"})));
+  svg.append(text(L + (W - L - R) / 2, T + rows * ch + 34, "Vaste kosten per module (M€)", {"text-anchor": "middle", class: "on-light"}),
+    text(4, T - 2, "Minimumlast", {class: "on-light"}));
+  // Omrand het vak dat het dichtst bij de huidige aannames ligt.
+  const nearest = (list, v) => list.reduce((best, x, k) => Math.abs(x - v) < Math.abs(list[best] - v) ? k : best, 0);
+  const nx = L + nearest(data.vaste_kosten_meur, data.nu.vaste_kosten_meur) * cw, ny = cy(nearest(data.minimumlast, data.nu.minimumlast));
+  svg.append(el("rect", {x: nx - 1, y: ny - 1, width: cw + 2, height: ch + 2, rx: 4, fill: "none", stroke: "#fff", "stroke-width": 6}),
+    el("rect", {x: nx - 1, y: ny - 1, width: cw + 2, height: ch + 2, rx: 4, fill: "none", stroke: COLORS.accent, "stroke-width": 3}));
+  // Legenda: één blokje per aantal modules.
+  const lw = Math.min(46, (W - L - R) / data.modules.length);
+  data.modules.forEach((n, k) => {
+    const x = L + k * lw, y = H - 38;
+    svg.append(el("rect", {x, y, width: lw - 3, height: 16, rx: 2, fill: ramp(tone(n))}),
+      text(x + (lw - 3) / 2, y + 12, String(n), {"text-anchor": "middle", "font-size": 11, class: tone(n) > 0.45 ? "on-dark" : "on-light"}));
+  });
+  svg.append(text(L + data.modules.length * lw + 8, H - 26, "modules", {class: "on-light"}),
+    el("rect", {x: L, y: H - 16, width: 22, height: 13, rx: 2, fill: "none", stroke: COLORS.accent, "stroke-width": 2.5}),
+    text(L + 30, H - 5, `huidige aannames (${nf(data.nu.minimumlast, 0)} %, ${nf(data.nu.vaste_kosten_meur, 2)} M€) of het dichtstbijzijnde vak`, {class: "on-light"}));
+  $("switch-map").replaceChildren(svg);
+}
+
+// ---------------------------------------------------------------- scenario
+
+function loadScenario() {
+  const changed = document.querySelectorAll(".field input.changed").length;
+  if (changed && !confirm(`Het scenario zet alle velden op de waarden voor ${meta.technologieen.alkaline_hoog.naam}. ${changed} eigen ${changed === 1 ? "wijziging vervalt" : "wijzigingen vervallen"}.`)) return;
+  buildForm({...selection(), technologie: "alkaline_hoog", aannames: {}, modules: meta.modules.filter(n => n <= 8)});
+  remember();
+  drawExplainers();
+  $("form").requestSubmit();
+}
+
+// ---------------------------------------------------------------- opgeslagen scenario's
+
+let shownSaved = null;
+let savedList = [];
+
+async function loadSaved() {
+  $("saved-status").textContent = "";
+  try {
+    const response = await fetch("/api/opsplitsing/scenarios");
+    if (!response.ok) throw new Error();
+    savedList = (await response.json()).scenarios;
+    drawSaved(savedList);
+  } catch {
+    $("saved-status").textContent = "De lijst met opgeslagen scenario's is niet te laden.";
+  }
+}
+
+const span = counts => counts.length > 2 && counts.every((n, i) => !i || n === counts[i - 1] + 1)
+  ? `${counts[0]}–${counts[counts.length - 1]}` : counts.join(", ");
+
+function drawSaved(list) {
+  const target = $("saved-list");
+  if (!list.length) {
+    target.innerHTML = `<div class="saved-empty"><p class="note">Nog geen opgeslagen scenario's. Draai lokaal, in de map van het project:</p>
+      <pre>python3 -m windprofiel.scenarios                 # PEM, alkaline en alkaline hoog × 3 besturingen, 1–16 modules
+python3 -m windprofiel.scenarios --modules 1-44 --technologie alkaline_hoog --strategie verdelen --jaren 2025</pre>
+      <p class="note">Klik daarna op "Lijst vernieuwen".</p></div>`;
+    return;
+  }
+  const table = document.createElement("table");
+  table.innerHTML = `<caption class="note">${list.length} scenario${list.length === 1 ? "" : "'s"}, nieuwste eerst. "Beste" = het aantal met de laagste kostprijs per kilo waterstof (LCOH).</caption>
+    <thead><tr><th scope="col">Scenario</th><th scope="col">Modules</th><th scope="col">Laagste prijs per kilo bij</th>
+    <th scope="col">€/kg: 1 module → beste</th><th scope="col">Meer waterstof</th><th scope="col">Gemaakt</th><th scope="col"></th></tr></thead>`;
+  const body = document.createElement("tbody");
+  for (const item of list) {
+    const tr = document.createElement("tr");
+    tr.classList.toggle("shown", item.id === shownSaved);
+    const cells = [item.naam, span(item.modules), label(item.beste.modules),
+      `${nf(item.een_module.lcoh_eur_kg, 2)} → ${nf(item.beste.lcoh_eur_kg, 2)} €/kg`,
+      pct(item.beste.waterstof_t / item.een_module.waterstof_t - 1),
+      new Date(item.gemaakt).toLocaleString("nl-NL", {dateStyle: "short", timeStyle: "short", timeZone: "Europe/Amsterdam"})];
+    cells.forEach((value, i) => {
+      const td = document.createElement("td");
+      td.textContent = value;   // namen komen uit bestanden: als tekst, nooit als HTML
+      if (i === 2) td.className = "best-n";
+      tr.append(td);
+    });
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "text-button";
+    button.textContent = "Toon";
+    button.addEventListener("click", () => showSaved(item.id));
+    const td = document.createElement("td");
+    td.append(button);
+    tr.append(td);
+    body.append(tr);
+  }
+  table.append(body);
+  target.replaceChildren(table);
+}
+
+async function showSaved(id) {
+  const status = $("saved-status");
+  status.classList.remove("error");
+  status.innerHTML = '<span class="spinner"></span>Scenario laden…';
+  try {
+    const response = await fetch("/api/opsplitsing/scenarios/" + encodeURIComponent(id));
+    const stored = await response.json();
+    if (!response.ok) throw new Error(stored.error || "Scenario niet gevonden.");
+    const result = stored.resultaat;
+    // De aannames staan opgeslagen in rekeneenheden (0,4); het formulier toont ze geschaald (40 %).
+    const scales = Object.fromEntries(meta.groepen.flatMap(g => g.velden.map(v => [v.key, v.schaal])));
+    const aannames = Object.fromEntries(Object.entries(result.aannames).filter(([key]) => key in scales)
+      .map(([key, value]) => [key, Math.round(value * scales[key] * 1e6) / 1e6]));
+    buildForm({technologie: stored.technologie, strategie: result.strategie, jaren: result.jaren, aannames,
+      modules: result.rijen.map(r => r.modules).filter(n => meta.modules.includes(n))});
+    remember();
+    drawExplainers();
+    render({...result, uit_cache: true});
+    shownSaved = id;
+    status.textContent = `Getoond: ${stored.naam}.`;
+    drawSaved(savedList);
+    $("results").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start"});
+  } catch (error) {
+    status.textContent = error.message;
+    status.classList.add("error");
+  }
 }
 
 function headline(rows, result) {
@@ -479,6 +755,8 @@ function render(result) {
   const rows = result.rijen;
   $("results").hidden = false;
   headline(rows, result);
+  winner(rows);
+  setupMap(result);
   lineWithRange("h2-chart", rows, "waterstof_t", "ton", 0);
   fixedCostChart(rows, result.aannames.vaste_kosten_module_meur);
   const net = revenuePerKg(result) > 0;
@@ -665,6 +943,9 @@ async function start() {
     drawExplainers();
   });
   $("day-run").addEventListener("click", runDay);
+  $("scenario-run").addEventListener("click", loadScenario);
+  $("saved-refresh").addEventListener("click", loadSaved);
+  loadSaved();
   $("step").addEventListener("input", event => selectStep(Number(event.target.value)));
   $("day-count").addEventListener("change", runDay);
   addEventListener("scroll", hideTip, {passive: true});

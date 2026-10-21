@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .application import PARKS, ROOT, build_profile, csv_rows, parse_alpha, validate_curve
 from .knmi import KNMIClient, KNMIError, load_env_file
-from . import opsplitsing
+from . import opsplitsing, scenarios
 
 STATIC = Path(__file__).parent / "static"
 FILES = {"/": ("index.html", "text/html"), "/app.js": ("app.js", "text/javascript"), "/style.css": ("style.css", "text/css"),
@@ -46,6 +46,15 @@ class Handler(BaseHTTPRequestHandler):
         if request.path == "/api/opsplitsing/aannames":
             self.json_response(200, opsplitsing.meta_json())
             return
+        if request.path == "/api/opsplitsing/scenarios":
+            self.json_response(200, {"scenarios": scenarios.listing()})
+            return
+        if request.path.startswith("/api/opsplitsing/scenarios/"):
+            try:
+                self.json_response(200, scenarios.load(request.path.removeprefix("/api/opsplitsing/scenarios/")))
+            except ValueError as exc:
+                self.json_response(404, {"error": str(exc)})
+            return
         if request.path not in ("/api/stations", "/api/profile", "/api/export.csv"):
             self.json_response(404, {"error": "Niet gevonden."})
             return
@@ -76,7 +85,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin and urlsplit(origin).netloc != self.headers.get("Host"):
             self.json_response(403, {"error": "Gebruik de webapp voor deze aanvraag."})
             return
-        if path in ("/api/opsplitsing", "/api/opsplitsing/dag", "/api/opsplitsing/gevoeligheid"):
+        if path in ("/api/opsplitsing", "/api/opsplitsing/dag", "/api/opsplitsing/gevoeligheid", "/api/opsplitsing/omslagkaart"):
             self.opsplitsing(path)
             return
         park_id = path.removeprefix("/api/curves/")
@@ -107,14 +116,16 @@ class Handler(BaseHTTPRequestHandler):
             counts = body.get("modules", opsplitsing.MODULE_COUNTS)
             if strategy not in opsplitsing.STRATEGIES:
                 raise ValueError("Onbekende besturing.")
-            if not isinstance(counts, list) or not counts or any(n not in opsplitsing.MODULE_COUNTS for n in counts):
-                raise ValueError("Kies moduleaantallen uit de lijst.")
-            if path in ("/api/opsplitsing", "/api/opsplitsing/gevoeligheid"):
+            if not isinstance(counts, list) or not counts or any(not isinstance(n, int) or isinstance(n, bool) or not 1 <= n <= opsplitsing.MAX_MODULES for n in counts):
+                raise ValueError(f"Kies moduleaantallen van 1 tot en met {opsplitsing.MAX_MODULES}.")
+            if path in ("/api/opsplitsing", "/api/opsplitsing/gevoeligheid", "/api/opsplitsing/omslagkaart"):
                 years = body.get("jaren", opsplitsing.available_years())
                 if not isinstance(years, list) or not years or any(y not in opsplitsing.available_years() for y in years):
                     raise ValueError("Kies windjaren uit de lijst.")
                 if path == "/api/opsplitsing":
                     self.json_response(200, opsplitsing.run(a, sorted(set(years)), counts, strategy))
+                elif path == "/api/opsplitsing/omslagkaart":
+                    self.json_response(200, opsplitsing.omslagkaart(a, sorted(set(years)), counts, strategy))
                 else:
                     n = body.get("n")
                     if not isinstance(n, int) or isinstance(n, bool):

@@ -32,7 +32,7 @@ from zoneinfo import ZoneInfo
 from .application import PARKS, ROOT, load_curve, park_power_mw, parse_wind, shear_exponent
 from .knmi import KNMIClient, KNMIError, load_env_file
 
-MODEL_VERSION = 9   # verhogen bij elke rekenwijziging; maakt oude uitkomsten in de cache ongeldig
+MODEL_VERSION = 10  # verhogen bij elke rekenwijziging; maakt oude uitkomsten in de cache ongeldig
 STEP_H = 1 / 6
 FRYSLAN_SHARE = 0.10
 CACHE = ROOT / ".cache" / "opsplitsing"
@@ -42,7 +42,8 @@ FIRST_YEAR = 2022   # eerste volledige jaar met Windpark Fryslân in bedrijf
 # weinig terwijl Houtribdijk wel wind ziet, dan past de hoogste lijn beter bij de productie van Fryslân.
 # Wynpark Beabuorren houdt alleen Stavoren, het dichtstbijzijnde station.
 STATIONS = {"houtribdijk": ("Houtribdijk", "0-20000-0-06258"), "stavoren": ("Stavoren", "0-20000-0-06267")}
-MODULE_COUNTS = [1, 2, 3, 4, 6, 8, 10, 11, 16]
+MODULE_COUNTS = [1, 2, 3, 4, 5, 6, 8, 10, 11, 16]   # keuzelijst op de pagina
+MAX_MODULES = 64                                     # bovengrens voor opgeslagen scenario's en aanvragen
 STRATEGIES = {
     "verdelen": "Per tijdstap het aantal modules dat de meeste waterstof geeft, last gelijk verdeeld.",
     "bijschakelen": "Modules één voor één bijschakelen; hooguit één module in deellast.",
@@ -100,6 +101,16 @@ TECHNOLOGIES = {
     "alkaline": ("Alkaline", replace(Aannames(), minimumlast=0.20, systeemverbruik_vol=52.4, degradatie_1000h=0.0012,
                                      koud_na_uur=4.0, opstart_warm_min=5.0, opstart_koud_min=45.0,
                                      stack_levensduur_uur=80000.0)),
+}
+# Scenario waarin 4 modules winnen: alkaline met een hoge minimumlast (gasvermenging bij lage last) en
+# goedkope losse units (containers met gedeelde BoP). Kleine modules draaien dan veel vaker.
+TECHNOLOGIES["alkaline_hoog"] = ("Alkaline, hoge minimumlast", replace(TECHNOLOGIES["alkaline"][1], minimumlast=0.40,
+                                                                      vaste_kosten_module_meur=0.3))
+TOELICHTING = {
+    "alkaline_hoog": "Veel alkaline-stacks mogen niet onder 30 à 50 % last draaien: daaronder mengt waterstof te veel met "
+                     "zuurstof. Eén module van 44 MW staat dan stil zolang er minder dan ~18 MW wind is; een module van 11 MW "
+                     "draait al vanaf ~4,5 MW. Met goedkope losse units (0,3 M€ vaste kosten, bijvoorbeeld containers met "
+                     "gedeelde BoP) wegen die extra draaiuren zwaarder dan de extra modules kosten.",
 }
 EU_TOOL = {"systeemverbruik_vol", "degradatie_1000h", "stack_levensduur_uur", "stack_aandeel",
            "opex_aandeel", "stroomprijs_eur_mwh", "netkosten_eur_mwh", "belasting_eur_mwh", "rente", "looptijd_jaar",
@@ -228,7 +239,8 @@ def meta_json() -> dict:
         {"key": key, "label": label, "eenheid": unit, "min": low, "max": high, "schaal": scale, "uitleg": hint,
          "standaard": base[key], "bron": source(key)}
         for key, label, unit, low, high, scale, hint in items]} for name, items in AANNAMES_META],
-        "technologieen": {key: {"naam": name, "waarden": shown(a)} for key, (name, a) in TECHNOLOGIES.items()},
+        "technologieen": {key: {"naam": name, "waarden": shown(a), "toelichting": TOELICHTING.get(key, "")}
+                          for key, (name, a) in TECHNOLOGIES.items()},
         "strategieen": STRATEGIES, "modules": MODULE_COUNTS, "jaren": available_years()}
 
 
@@ -413,7 +425,7 @@ def simulate(supply: dict, n: int, a: Aannames, strategy: str, trace: range | No
     hours = [0.0] * n
     warm = [0] * n
     cold = [0] * n
-    kg = used = standby = lost_outage = 0.0
+    kg = used = standby = lost_outage = producing = 0.0
     daily: dict[str, list[float]] = {}
     steps = []
     memo = {}
@@ -475,6 +487,7 @@ def simulate(supply: dict, n: int, a: Aannames, strategy: str, trace: range | No
                 off_h[i] += STEP_H
                 stack[i] = 0.0
         kg += step_kg
+        producing += STEP_H if step_kg > 0 else 0.0
         day = datetime.fromtimestamp(stamp, LOCAL).date().isoformat()
         entry = daily.setdefault(day, [0.0, 0.0])
         entry[0] += step_kg
@@ -500,7 +513,7 @@ def simulate(supply: dict, n: int, a: Aannames, strategy: str, trace: range | No
         "waterstof_t": kg * scale / 1000, "verbruik_mwh": used * scale, "standby_mwh": standby * scale,
         "aanbod_mwh": supply_mwh * scale,
         "benutting": used / supply_mwh if supply_mwh else 0.0,
-        "bedrijfsuren_gem": sum(hours) / n * scale,
+        "bedrijfsuren_gem": sum(hours) / n * scale, "productie_uur": producing * scale,
         "starts_warm_per_module": sum(warm) / n * scale, "starts_koud_per_module": sum(cold) / n * scale,
         "eq_uren_per_module": [e * scale for e in eq],
         "dekking_uur": len(mw) * STEP_H,
@@ -585,7 +598,15 @@ def break_even(rows: list[dict], a: Aannames) -> None:
         if previous:
             row["extra_waterstof_t"] = row["waterstof_t"] - previous["waterstof_t"]
             row["extra_kosten_meur_jaar"] = row["kosten_meur_jaar"] - previous["kosten_meur_jaar"]
+            row["extra_productie_uur"] = row["productie_uur"] - previous["productie_uur"]
+            # Wat de extra kilo's van deze stap kosten. Lager dan de LCOH van de vorige stap: de stap verlaagt de LCOH.
+            extra_kg = row["extra_waterstof_t"] * 1000
+            row["marginale_eur_kg"] = row["extra_kosten_meur_jaar"] * 1e6 / extra_kg if extra_kg > 0 else None
+            row["stap_loont"] = row["lcoh_eur_kg"] < previous["lcoh_eur_kg"]
         previous = row
+    best = min(rows, key=lambda r: r["lcoh_eur_kg"] if r["lcoh_eur_kg"] is not None else float("inf"))
+    for row in rows:
+        row["beste"] = row is best
 
 
 def fixed_cost_break_even(single: dict, row: dict, a: Aannames) -> float | None:
@@ -695,7 +716,7 @@ def variants(a: Aannames, key: str) -> list[tuple[float, Aannames]]:
 
 def sensitivity(a: Aannames, years: list[int], n: int, strategy: str, workers: int | None = None) -> dict:
     """Hoe het voordeel van n modules boven één module (€/kg) verschuift als elke aanname 25 % verandert."""
-    if n <= 1 or n not in MODULE_COUNTS or strategy not in STRATEGIES or not years:
+    if not 1 < n <= MAX_MODULES or strategy not in STRATEGIES or not years:
         raise ValueError("Kies een aantal modules groter dan 1, een besturing en minstens één windjaar.")
     supplies = {year: supply_year(year) for year in years}
     key = hashlib.sha256(json.dumps([MODEL_VERSION, "gevoeligheid", asdict(a), years, n, strategy, SENSITIVITY_STEP,
@@ -728,6 +749,52 @@ def sensitivity(a: Aannames, years: list[int], n: int, strategy: str, workers: i
                           "bereik": abs(ends[1]["voordeel"] - ends[0]["voordeel"])})
     items.sort(key=lambda item: item["bereik"], reverse=True)
     data = {"modules": n, "voordeel": base, "stap": SENSITIVITY_STEP, "aannames": items}
+    CACHE.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data))
+    return data
+
+
+OMSLAG_MINIMUMLAST = [0.10, 0.20, 0.30, 0.40, 0.50]
+OMSLAG_VASTE_KOSTEN = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5]
+
+
+def omslagkaart(a: Aannames, years: list[int], counts: list[int], strategy: str, workers: int | None = None) -> dict:
+    """Het goedkoopste aantal modules per combinatie van minimumlast en vaste kosten per module.
+
+    De minimumlast vraagt een nieuwe simulatie; de vaste kosten alleen een nieuwe kostenberekening.
+    """
+    counts = sorted(set(counts))
+    if len(counts) < 2 or strategy not in STRATEGIES or not years:
+        raise ValueError("Kies minstens twee moduleaantallen, een besturing en minstens één windjaar.")
+    supplies = {year: supply_year(year) for year in years}
+    key = hashlib.sha256(json.dumps([MODEL_VERSION, "omslag", asdict(a), years, counts, strategy, OMSLAG_MINIMUMLAST,
+                                     OMSLAG_VASTE_KOSTEN, [len(s["t"]) for s in supplies.values()]]).encode()).hexdigest()[:20]
+    path = CACHE / f"omslag-{key}.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    cases = [replace(a, minimumlast=m) for m in OMSLAG_MINIMUMLAST]
+    jobs = [(supplies[y], n, case, strategy) for case in cases for n in counts for y in years]
+    with ProcessPoolExecutor(workers) as pool:
+        results = list(pool.map(_job, jobs))
+    size = len(years)
+    grid = []
+    for i, case in enumerate(cases):
+        line = []
+        for f in OMSLAG_VASTE_KOSTEN:
+            variant = replace(case, vaste_kosten_module_meur=f)
+            if per_kw_eur(variant) <= 0:
+                line.append(None)
+                continue
+            lcoh = []
+            for j, n in enumerate(counts):
+                start = (i * len(counts) + j) * size
+                lcoh.append(summarise(results[start:start + size], variant)["lcoh_eur_kg"])
+            best = min(range(len(counts)), key=lambda j: lcoh[j] if lcoh[j] is not None else float("inf"))
+            line.append({"beste": counts[best], "lcoh_eur_kg": lcoh[best], "lcoh_een_eur_kg": lcoh[0]})
+        grid.append(line)
+    data = {"minimumlast": [m * 100 for m in OMSLAG_MINIMUMLAST], "vaste_kosten_meur": OMSLAG_VASTE_KOSTEN,
+            "modules": counts, "cellen": grid, "nu": {"minimumlast": a.minimumlast * 100,
+                                                     "vaste_kosten_meur": a.vaste_kosten_module_meur}}
     CACHE.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data))
     return data
@@ -781,10 +848,10 @@ def day_trace(a: Aannames, day: date, counts: list[int], strategy: str) -> dict:
 
 # ---------------------------------------------------------------- opdrachtregel
 
-CSV_FIELDS = ["scenario", "strategie", "modules", "module_mw", "waterstof_t", "benutting", "bedrijfsuren_gem",
+CSV_FIELDS = ["scenario", "strategie", "modules", "module_mw", "waterstof_t", "benutting", "bedrijfsuren_gem", "productie_uur",
               "starts_warm_per_module", "starts_koud_per_module", "jaren_tot_stackwissel", "capex_meur",
               "stack_meur_jaar", "kosten_meur_jaar", "lcoh_eur_kg", "netto_eur_kg", "capex_break_even_meur", "vaste_kosten_break_even_meur", "extra_waterstof_t",
-              "extra_kosten_meur_jaar"]
+              "extra_kosten_meur_jaar", "marginale_eur_kg", "beste"]
 
 
 def main() -> int:

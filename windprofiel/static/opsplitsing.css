@@ -201,3 +201,38 @@ footer{color:var(--muted);font-size:12px;border-top:1px solid var(--ink);margin-
 .why-grid .chart-card>p{margin:0 0 10px}
 .heaviest{font-size:15px;color:var(--ink)!important}
 @media(max-width:900px){.why-grid{grid-template-columns:1fr}}
+
+/* Scenario en beste aantal */
+.scenario{display:flex;gap:24px;align-items:center;justify-content:space-between;background:var(--sky);border-left:6px solid var(--accent);border-radius:0 24px 0 0;padding:20px 24px;margin-bottom:22px}
+.scenario h3{font-size:21px;font-weight:500;margin:6px 0}
+.scenario p{margin:0;font-size:14px;max-width:760px}
+.scenario button{flex:none}
+#tech-note:empty{display:none}
+.winner{margin-bottom:28px}
+.winner>h3{font-size:clamp(24px,2.4vw,34px);font-weight:500;letter-spacing:-.5px;line-height:1.2;margin:8px 0}
+.winner-text{max-width:900px;margin:0 0 18px;font-size:15px}
+.winner-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:22px}
+.map-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:10px}
+.key.cost{height:10px;background:var(--series-2);border-radius:0 3px 3px 0}
+.key.cost-no{height:10px;background:#a9b6c2;border-radius:0 3px 3px 0}
+.key.tick{width:0;height:14px;border-left:2px solid var(--ink);background:none}
+@media(max-width:900px){.winner-grid{grid-template-columns:1fr}.scenario{flex-direction:column;align-items:flex-start}}
+.chart text.on-dark{fill:#fff}
+.chart text.on-light{fill:var(--ink)}
+
+/* Opgeslagen scenario's */
+.saved-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:12px}
+#saved code,.saved-empty code{font-family:inherit;font-size:13px;background:var(--paper);padding:1px 6px}
+.saved-empty pre{background:var(--paper);border-left:3px solid var(--accent);padding:12px 14px;font-size:13px;white-space:pre-wrap;margin:8px 0 0}
+#saved-list table td.best-n{font-weight:700}
+#saved-list tr.shown td{background:var(--sky)}
+#saved-list .text-button{font-size:14px;font-weight:600}
+.winner-compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;max-width:760px;margin:12px 0 16px}
+.winner-compare>div{border:1px solid var(--line);border-radius:0 18px 0 0;padding:14px 18px;background:#fff}
+.winner-compare>div.win{border:2px solid var(--ink);background:var(--sky)}
+.winner-compare span{font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+.winner-compare strong{display:block;font-size:34px;font-weight:500;line-height:1.15;margin:4px 0 8px;font-variant-numeric:tabular-nums}
+.winner-compare small{font-size:13px;font-weight:400;color:var(--muted)}
+.winner-compare dl{display:grid;grid-template-columns:auto auto;gap:2px 14px;margin:0;font-size:13px}
+.winner-compare dt{color:var(--muted)}
+.winner-compare dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
