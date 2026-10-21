@@ -122,7 +122,7 @@ def main() -> int:
     if args.lijst:
         for item in listing():
             best = item["beste"]
-            print(f'{item["id"]:50} {span(item["modules"]):>8} modules  goedkoopst {best["modules"]:2} '
+            print(f'{item["id"]:50} {span(item["modules"]):>8} modules  laagste €/kg bij {best["modules"]:2} '
                   f'({best["lcoh_eur_kg"]:.2f} €/kg)  {item["gemaakt"]}')
         return 0
     if args.verwijder:
@@ -164,7 +164,7 @@ def main() -> int:
         result = run(a, years, counts, strategy)
         path = save(name, tech, changes, result)
         best = min(result["rijen"], key=lambda r: r["lcoh_eur_kg"] if r["lcoh_eur_kg"] is not None else float("inf"))
-        print(f"[{index}/{len(plans)}] {name}: goedkoopst {best['modules']} modules, {best['lcoh_eur_kg']:.2f} €/kg "
+        print(f"[{index}/{len(plans)}] {name}: laagste kostprijs per kilo bij {best['modules']} modules, {best['lcoh_eur_kg']:.2f} €/kg "
               f"({time.perf_counter() - began:.0f} s{', uit cache' if result['uit_cache'] else ''}) → {path.relative_to(ROOT)}")
     print(f"Overzicht: {write_overview().relative_to(ROOT)}. Open http://127.0.0.1:8000/opsplitsing → Opgeslagen scenario's.")
     return 0

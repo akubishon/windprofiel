@@ -227,3 +227,12 @@ footer{color:var(--muted);font-size:12px;border-top:1px solid var(--ink);margin-
 #saved-list table td.best-n{font-weight:700}
 #saved-list tr.shown td{background:var(--sky)}
 #saved-list .text-button{font-size:14px;font-weight:600}
+.winner-compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;max-width:760px;margin:12px 0 16px}
+.winner-compare>div{border:1px solid var(--line);border-radius:0 18px 0 0;padding:14px 18px;background:#fff}
+.winner-compare>div.win{border:2px solid var(--ink);background:var(--sky)}
+.winner-compare span{font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+.winner-compare strong{display:block;font-size:34px;font-weight:500;line-height:1.15;margin:4px 0 8px;font-variant-numeric:tabular-nums}
+.winner-compare small{font-size:13px;font-weight:400;color:var(--muted)}
+.winner-compare dl{display:grid;grid-template-columns:auto auto;gap:2px 14px;margin:0;font-size:13px}
+.winner-compare dt{color:var(--muted)}
+.winner-compare dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}

@@ -468,20 +468,34 @@ const signed = (value, digits, unit) => {
 function winner(rows) {
   const best = rows.find(r => r.beste) || rows[0];
   const base = rows[0];
-  $("winner-title").textContent = `${label(best.modules)} ${rows.length > 1 ? "is het goedkoopst" : ""}: ${nf(best.lcoh_eur_kg, 2)} €/kg`;
   const index = rows.indexOf(best);
   const next = rows[index + 1];
+  $("winner-title").textContent = rows.length < 2 ? `Kostprijs per kilo waterstof met ${label(best.modules)}`
+    : best === base ? `Opsplitsen loont hier niet: ${label(base.modules)} geeft de laagste kostprijs per kilo`
+    : `${label(best.modules)} geeft de laagste kostprijs per kilo waterstof`;
+  // Twee tegels naast elkaar: zo is te zien dat de investering stijgt, terwijl de kilo goedkoper wordt.
+  const compare = best === base ? (next ? [base, next] : [base]) : [base, best];
+  const tile = row => `<div class="${row === best ? "win" : ""}">
+      <span>${label(row.modules)} van ${nf(row.module_mw)} MW${row === best ? " · laagste kostprijs" : ""}</span>
+      <strong>${nf(row.lcoh_eur_kg, 2)} <small>€ per kilo waterstof</small></strong>
+      <dl><dt>Investering</dt><dd>${nf(row.capex_meur, 1)} M€</dd>
+        <dt>Kosten per jaar</dt><dd>${nf(row.kosten_meur_jaar, 1)} M€</dd>
+        <dt>Waterstof per jaar</dt><dd>${nf(row.waterstof_t, 0)} ton</dd>
+        <dt>Uren met waterstof</dt><dd>${hours(row.productie_uur)}</dd></dl></div>`;
+  $("winner-compare").innerHTML = compare.map(tile).join("");
   const parts = [];
   if (best !== base) {
-    parts.push(`Met ${label(best.modules)} wordt <b>${hours(best.productie_uur)}</b> per jaar waterstof gemaakt, tegen ${hours(base.productie_uur)}
-      met ${label(base.modules)} (${pct(best.productie_uur / base.productie_uur - 1, 0)}). Dat levert ${nf(best.waterstof_t - base.waterstof_t, 0)} ton
-      per jaar meer op, en per kilo ${nf(base.lcoh_eur_kg - best.lcoh_eur_kg, 2)} € minder.`);
+    parts.push(`${label(best.modules)} kost <b>${nf(best.capex_meur - base.capex_meur, 1)} M€ meer</b> om te bouwen dan ${label(base.modules)},
+      maar maakt <b>${nf(best.waterstof_t - base.waterstof_t, 0)} ton per jaar meer</b> waterstof, omdat de kleine modules vaker draaien
+      (${hours(best.productie_uur)} in plaats van ${hours(base.productie_uur)}). Verdeeld over al die extra kilo's is elke kilo
+      <b>${nf(base.lcoh_eur_kg - best.lcoh_eur_kg, 2)} € goedkoper</b>.`);
     if (best.marginale_eur_kg != null) parts.push(`De laatste stap naar ${label(best.modules)} levert kilo's van ${nf(best.marginale_eur_kg, 2)} €/kg:
       goedkoper dan het gemiddelde van ${nf(rows[index - 1].lcoh_eur_kg, 2)} €/kg, dus het gemiddelde zakt.`);
   } else if (next) {
-    parts.push(`Opsplitsen loont hier niet: de extra waterstof van ${label(next.modules)} weegt niet op tegen de extra kosten.`);
+    parts.push(`${label(next.modules)} maakt ${nf(next.waterstof_t - base.waterstof_t, 0)} ton per jaar meer waterstof, maar dat weegt niet op
+      tegen de ${nf(next.kosten_meur_jaar - base.kosten_meur_jaar, 2)} M€ extra kosten per jaar.`);
   }
-  if (next) parts.push(next.marginale_eur_kg != null
+  if (next && best !== base) parts.push(next.marginale_eur_kg != null
     ? `Naar ${label(next.modules)} kosten de extra kilo's ${nf(next.marginale_eur_kg, 2)} €/kg: duurder dan ${nf(best.lcoh_eur_kg, 2)} €/kg, dus daar stopt het.`
     : `${label(next.modules)} levert geen extra waterstof meer op.`);
   $("winner-text").innerHTML = parts.join(" ");
@@ -589,7 +603,7 @@ function drawMap(data) {
         text(x + cw / 2, y + ch / 2 + 5, String(cell.beste), {"text-anchor": "middle", "font-size": 14, "font-weight": 700, class: t > 0.45 ? "on-dark" : "on-light"}));
       const hit = el("rect", {x, y, width: cw, height: ch, class: "hit"});
       hit.addEventListener("mousemove", event => showTip(event, `<b>Minimumlast ${nf(m, 0)} %, vaste kosten ${nf(f, 2)} M€ per module</b>
-        <br>Goedkoopst: ${label(cell.beste)}, ${nf(cell.lcoh_eur_kg, 2)} €/kg<br>${label(data.modules[0])}: ${nf(cell.lcoh_een_eur_kg, 2)} €/kg`));
+        <br>Laagste kostprijs per kilo: ${label(cell.beste)}, ${nf(cell.lcoh_eur_kg, 2)} €/kg<br>${label(data.modules[0])}: ${nf(cell.lcoh_een_eur_kg, 2)} €/kg`));
       hit.addEventListener("mouseleave", hideTip);
       svg.append(hit);
     });
@@ -656,9 +670,9 @@ python3 -m windprofiel.scenarios --modules 1-44 --technologie alkaline_hoog --st
     return;
   }
   const table = document.createElement("table");
-  table.innerHTML = `<caption class="note">${list.length} scenario${list.length === 1 ? "" : "'s"}, nieuwste eerst. Goedkoopst = laagste LCOH.</caption>
-    <thead><tr><th scope="col">Scenario</th><th scope="col">Modules</th><th scope="col">Goedkoopst</th>
-    <th scope="col">LCOH 1 module → goedkoopst</th><th scope="col">Meer waterstof</th><th scope="col">Gemaakt</th><th scope="col"></th></tr></thead>`;
+  table.innerHTML = `<caption class="note">${list.length} scenario${list.length === 1 ? "" : "'s"}, nieuwste eerst. "Beste" = het aantal met de laagste kostprijs per kilo waterstof (LCOH).</caption>
+    <thead><tr><th scope="col">Scenario</th><th scope="col">Modules</th><th scope="col">Laagste prijs per kilo bij</th>
+    <th scope="col">€/kg: 1 module → beste</th><th scope="col">Meer waterstof</th><th scope="col">Gemaakt</th><th scope="col"></th></tr></thead>`;
   const body = document.createElement("tbody");
   for (const item of list) {
     const tr = document.createElement("tr");
