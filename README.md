@@ -125,8 +125,11 @@ lijn past beter bij wat het park zelf levert dan één station. Beabuorren houdt
   In het laatste scenario wordt met 4 modules 6255 uur per jaar waterstof gemaakt, tegen
   3468 uur met 1 module.
 - **Een dag van dichtbij** vergelijkt het verbruik van 1 module en N modules per tien minuten.
-  Kies een moment in de grafiek: zes kaarten rekenen dat moment met de echte getallen door,
-  van KNMI-wind tot kilo's waterstof.
+  Kies een moment in de grafiek of met de tijdschuif en vorige/volgende. De productie van beide
+  configuraties staat bij de grafiek. Daarnaast tonen zes compacte rekenstappen hun kernwaarden;
+  alle formules blijven per stap en via ‘Alle rekenstappen tonen’ beschikbaar. De geopende stappen
+  blijven open wanneer het tijdstip verandert. De gewone tekst en tabellen zijn groter en er staan
+  maximaal twee grote resultaatgrafieken per rij.
 
 De eerste berekening haalt de vier windjaren één keer bij KNMI op (een paar seconden
 per jaar). Het aanbod per jaar en elke uitkomst worden in `.cache/opsplitsing/`
