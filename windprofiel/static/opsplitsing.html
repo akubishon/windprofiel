@@ -81,9 +81,19 @@
             zoals minimumlast en opstarttijden, staat als plaatshouder; elk veld zegt waar de waarde vandaan komt. Alles is aan te passen
             en je wijzigingen blijven in deze browser bewaard.</p>
         </div></div>
+        <aside class="scenario" aria-labelledby="scenario-title">
+          <div>
+            <span class="eyebrow">Scenario</span>
+            <h3 id="scenario-title">Wanneer wint 4 modules?</h3>
+            <p>Opsplitsen loont als kleine modules vaker waterstof maken dan één grote. Dat gebeurt vooral als een module een
+              <b>hoge minimumlast</b> heeft (alkaline: vaak 30 à 50 %) en een extra unit <b>weinig vaste kosten</b> heeft. Dit scenario
+              zet alkaline op 40 % minimumlast en 0,3 M€ vaste kosten per module, en rekent 1 tot 8 modules door.</p>
+          </div>
+          <button class="primary-button" type="button" id="scenario-run">Laad scenario en bereken</button>
+        </aside>
         <form id="form" novalidate>
           <div class="choices">
-            <fieldset><legend>Technologie</legend><div id="technologies" class="radio-list"></div></fieldset>
+            <fieldset><legend>Technologie</legend><div id="technologies" class="radio-list"></div><p id="tech-note" class="note"></p></fieldset>
             <fieldset><legend>Besturing</legend><div id="strategies" class="radio-list"></div></fieldset>
             <fieldset><legend>Windjaren</legend><div id="years" class="check-list"></div></fieldset>
             <fieldset><legend>Aantal modules</legend><div id="counts" class="check-list"></div></fieldset>
@@ -103,6 +113,28 @@
           <p id="result-sub"></p>
         </div></div>
         <div id="headline" class="headline"></div>
+        <section class="winner" aria-labelledby="winner-title">
+          <span class="eyebrow">Beste aantal modules</span>
+          <h3 id="winner-title"></h3>
+          <p id="winner-text" class="winner-text"></p>
+          <div class="winner-grid">
+            <figure class="chart-card">
+              <h3>Stap voor stap: loont nog een module erbij?</h3>
+              <p>Per extra module: wat de kilo's kosten die hij extra oplevert. Ligt de balk links van het streepje (de gemiddelde
+                kosten per kilo tot dan toe), dan trekt de stap het gemiddelde omlaag en loont hij.</p>
+              <div id="ladder-legend" class="legend"></div>
+              <div id="ladder" class="chart"></div>
+            </figure>
+            <figure class="chart-card">
+              <h3>Omslagkaart: welk aantal wint waar?</h3>
+              <p>Het goedkoopste aantal modules bij elke combinatie van minimumlast en vaste kosten per module; alle andere aannames
+                zoals nu. Het omrande vak ligt het dichtst bij de huidige aannames. Rekent vijf minimumlasten opnieuw door, dus de eerste keer duurt het even.</p>
+              <div class="map-actions"><button class="secondary-button" type="button" id="map-run">Bereken omslagkaart</button>
+                <span id="map-status" class="note" role="status" aria-live="polite"></span></div>
+              <div id="switch-map" class="chart"></div>
+            </figure>
+          </div>
+        </section>
         <div class="chart-grid">
           <figure class="chart-card">
             <h3>Waterstof per jaar</h3>

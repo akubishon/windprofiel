@@ -4,7 +4,7 @@
 const $ = id => document.getElementById(id);
 const SVG = "http://www.w3.org/2000/svg";
 const STORE = "opsplitsing-v2";   // v2: technologiekeuze en EU-standaardwaarden
-const COLORS = {one: "#22528F", many: "#0094C6", wash: "#C3E4F2", ink: "#0C2340", muted: "#465970"};
+const COLORS = {one: "#22528F", many: "#0094C6", accent: "#00A6DE", wash: "#C3E4F2", ink: "#0C2340", muted: "#465970"};
 const nf = (value, digits = 1) => value == null || !isFinite(value) ? "–"
   : new Intl.NumberFormat("nl-NL", {minimumFractionDigits: digits, maximumFractionDigits: digits}).format(value);
 const pct = (value, digits = 1) => (value > 0 ? "+" : "") + nf(value * 100, digits) + " %";
@@ -142,6 +142,7 @@ function buildForm(state) {
     labelNode.querySelector("input").checked = chosen.includes(value);
     return labelNode;
   }));
+  $("tech-note").textContent = meta.technologieen[tech].toelichting || "";
   checks("years", "jaar", meta.jaren, state.jaren?.length ? state.jaren : meta.jaren, String);
   checks("counts", "modules", meta.modules, state.modules?.length ? state.modules : meta.modules, String);
   const opened = loadOpen();
@@ -435,6 +436,7 @@ function table(rows, net) {
     ["Waterstof (t/jaar)", r => nf(r.waterstof_t, 0)],
     ["Benutting aanbod", r => nf(r.benutting * 100) + " %"],
     ["Bedrijfsuren per module", r => nf(r.bedrijfsuren_gem, 0)],
+    ["Uren met waterstof", r => nf(r.productie_uur, 0)],
     ["Starts per module (warm / koud)", r => `${nf(r.starts_warm_per_module, 0)} / ${nf(r.starts_koud_per_module, 0)}`],
     ["Stackwissel na (jaar)", r => nf(r.jaren_tot_stackwissel)],
     ["CAPEX (M€)", r => nf(r.capex_meur)],
@@ -451,6 +453,168 @@ function table(rows, net) {
   const head = `<caption class="note">Gemiddelden over de gekozen windjaren. De vetgedrukte rij heeft de laagste LCOH.</caption><thead><tr>${columns.map(c => `<th scope="col">${c[0]}</th>`).join("")}</tr></thead>`;
   const body = rows.map(r => `<tr${r === best ? ' class="best"' : ""}>${columns.map(c => `<td>${c[1](r)}</td>`).join("")}</tr>`).join("");
   $("table").innerHTML = head + `<tbody>${body}</tbody>`;
+}
+
+// ---------------------------------------------------------------- beste aantal modules
+
+const hours = value => nf(value, 0) + " uur";
+const signed = (value, digits, unit) => (value > 0 ? "+" : value < 0 ? "−" : "") + nf(Math.abs(value), digits) + unit;
+
+function winner(rows) {
+  const best = rows.find(r => r.beste) || rows[0];
+  const base = rows[0];
+  $("winner-title").textContent = `${label(best.modules)} ${rows.length > 1 ? "is het goedkoopst" : ""}: ${nf(best.lcoh_eur_kg, 2)} €/kg`;
+  const index = rows.indexOf(best);
+  const next = rows[index + 1];
+  const parts = [];
+  if (best !== base) {
+    parts.push(`Met ${label(best.modules)} wordt <b>${hours(best.productie_uur)}</b> per jaar waterstof gemaakt, tegen ${hours(base.productie_uur)}
+      met ${label(base.modules)} (${pct(best.productie_uur / base.productie_uur - 1, 0)}). Dat levert ${nf(best.waterstof_t - base.waterstof_t, 0)} ton
+      per jaar meer op, en per kilo ${nf(base.lcoh_eur_kg - best.lcoh_eur_kg, 2)} € minder.`);
+    if (best.marginale_eur_kg != null) parts.push(`De laatste stap naar ${label(best.modules)} levert kilo's van ${nf(best.marginale_eur_kg, 2)} €/kg:
+      goedkoper dan het gemiddelde van ${nf(rows[index - 1].lcoh_eur_kg, 2)} €/kg, dus het gemiddelde zakt.`);
+  } else if (next) {
+    parts.push(`Opsplitsen loont hier niet: de extra waterstof van ${label(next.modules)} weegt niet op tegen de extra kosten.`);
+  }
+  if (next) parts.push(next.marginale_eur_kg != null
+    ? `Naar ${label(next.modules)} kosten de extra kilo's ${nf(next.marginale_eur_kg, 2)} €/kg: duurder dan ${nf(best.lcoh_eur_kg, 2)} €/kg, dus daar stopt het.`
+    : `${label(next.modules)} levert geen extra waterstof meer op.`);
+  $("winner-text").innerHTML = parts.join(" ");
+  ladder(rows);
+}
+
+// Horizontale trap: per stap de kosten van de extra kilo's, met een streepje op het gemiddelde ervoor.
+function ladder(rows) {
+  const steps = rows.slice(1);
+  if (!steps.length) { $("ladder").textContent = "Kies minstens twee moduleaantallen."; $("ladder-legend").innerHTML = ""; return; }
+  const average = Math.max(...rows.map(r => r.lcoh_eur_kg ?? 0));
+  const known = steps.map(r => r.marginale_eur_kg).filter(v => v != null && v > 0);
+  const top = niceTop(Math.min(Math.max(average * 1.3, ...known), average * 3));
+  const W = 640, L = 118, R = 150, T = 26, height = 40, H = T + steps.length * height + 24;
+  const px = v => L + Math.max(0, Math.min(v, top)) / top * (W - L - R);
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, "aria-hidden": "true"});
+  const scale = niceScale(0, top);
+  for (let v = 0; v <= top + 1e-9; v += scale.step) {
+    svg.append(el("line", {x1: px(v), x2: px(v), y1: T - 6, y2: H - 22, class: v ? "grid" : "axis"}),
+      text(px(v), H - 6, nf(v, 0), {"text-anchor": "middle"}));
+  }
+  svg.append(text(W - R + 10, H - 6, "€/kg"), text(W - R + 10, T - 10, "meer waterstof"));
+  steps.forEach((row, i) => {
+    const before = rows[i], y = T + i * height, mid = y + height / 2;
+    const value = row.marginale_eur_kg;
+    svg.append(text(L - 10, mid + 4, `${before.modules} → ${row.modules}`, {"text-anchor": "end", class: "on-light", "font-size": 13, "font-weight": row.beste ? 700 : 400}));
+    const end = value == null ? px(top) : px(value);
+    const w = Math.max(2, end - px(0)), r = Math.min(4, w);
+    svg.append(el("path", {d: `M${px(0)},${y + 9} H${px(0) + w - r} Q${px(0) + w},${y + 9} ${px(0) + w},${y + 9 + r} V${y + height - 9 - r} Q${px(0) + w},${y + height - 9} ${px(0) + w - r},${y + height - 9} H${px(0)} Z`,
+      fill: row.stap_loont ? COLORS.many : "#a9b6c2"}));
+    const mark = px(before.lcoh_eur_kg);
+    svg.append(el("line", {x1: mark, x2: mark, y1: y + 4, y2: y + height - 4, stroke: COLORS.ink, "stroke-width": 2}));
+    const shownValue = value == null ? "geen extra H₂" : value > top ? `> ${nf(top, 0)} €/kg` : nf(value, 2) + " €/kg";
+    svg.append(text(Math.max(end, mark) + 6, mid + 4, shownValue, {class: "label"}),
+      text(W - R + 10, mid + 4, `${signed(row.extra_productie_uur, 0, " uur")} · ${signed(row.extra_waterstof_t, 0, " t")}`, {class: "on-light", "font-size": 11}));
+    const hit = el("rect", {x: 0, y, width: W, height, class: "hit"});
+    hit.addEventListener("mousemove", event => showTip(event, `<b>${before.modules} → ${row.modules} modules</b>
+      <br>${signed(row.extra_productie_uur, 0, " uur")} per jaar met waterstofproductie
+      <br>${signed(row.extra_waterstof_t, 1, " ton")} waterstof per jaar
+      <br>${signed(row.extra_kosten_meur_jaar, 2, " M€")} kosten per jaar
+      <br>Extra kilo's kosten ${value == null ? "–" : nf(value, 2) + " €/kg"}, gemiddeld was ${nf(before.lcoh_eur_kg, 2)} €/kg
+      <br><b>${row.stap_loont ? `Loont: LCOH ${nf(before.lcoh_eur_kg, 2)} → ${nf(row.lcoh_eur_kg, 2)} €/kg` : `Loont niet: LCOH ${nf(before.lcoh_eur_kg, 2)} → ${nf(row.lcoh_eur_kg, 2)} €/kg`}</b>`));
+    hit.addEventListener("mouseleave", hideTip);
+    svg.append(hit);
+  });
+  $("ladder-legend").innerHTML = `<span><span class="key cost"></span> Stap loont</span><span><span class="key cost-no"></span> Stap loont niet</span>
+    <span><span class="key tick"></span> Gemiddelde kosten per kilo vóór de stap</span>`;
+  $("ladder").replaceChildren(svg);
+}
+
+// ---------------------------------------------------------------- omslagkaart
+
+let mapToken = 0;
+
+function setupMap(result) {
+  mapToken++;
+  $("switch-map").replaceChildren();
+  $("map-status").textContent = result.rijen.length > 1 ? "" : "Kies minstens twee moduleaantallen.";
+  $("map-run").disabled = result.rijen.length < 2;
+  $("map-run").onclick = () => loadMap(result);
+}
+
+async function loadMap(result) {
+  const token = ++mapToken;
+  $("map-run").disabled = true;
+  $("map-status").innerHTML = '<span class="spinner"></span>Omslagkaart berekenen…';
+  try {
+    const data = await post("/api/opsplitsing/omslagkaart", {aannames: values(), strategie: result.strategie, jaren: result.jaren,
+      modules: result.rijen.map(r => r.modules)});
+    if (token !== mapToken) return;
+    $("map-status").textContent = "";
+    drawMap(data);
+  } catch (error) {
+    if (token !== mapToken) return;
+    $("map-status").textContent = error.message;
+  } finally {
+    if (token === mapToken) $("map-run").disabled = false;
+  }
+}
+
+// Eén tint van licht naar donker: meer modules is donkerder. Het getal staat altijd in de cel.
+function ramp(t) {
+  const a = [0xC3, 0xE4, 0xF2], b = [0x0C, 0x23, 0x40];
+  return "#" + a.map((c, i) => Math.round(c + (b[i] - c) * t).toString(16).padStart(2, "0")).join("");
+}
+
+function drawMap(data) {
+  const rows = data.minimumlast.length, cols = data.vaste_kosten_meur.length;
+  const W = 520, L = 64, R = 10, T = 14, B = 80, cw = (W - L - R) / cols, ch = 38, H = T + rows * ch + B;
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, "aria-hidden": "true"});
+  const tone = n => data.modules.length > 1 ? data.modules.indexOf(n) / (data.modules.length - 1) : 0;
+  // Hoogste minimumlast bovenaan.
+  const cy = i => T + (rows - 1 - i) * ch;
+  data.minimumlast.forEach((m, i) => {
+    svg.append(text(L - 8, cy(i) + ch / 2 + 4, nf(m, 0) + " %", {"text-anchor": "end"}));
+    data.vaste_kosten_meur.forEach((f, j) => {
+      const cell = data.cellen[i][j], x = L + j * cw, y = cy(i);
+      if (!cell) { svg.append(el("rect", {x: x + 1, y: y + 1, width: cw - 2, height: ch - 2, fill: "#eef1f4"})); return; }
+      const t = tone(cell.beste);
+      svg.append(el("rect", {x: x + 1, y: y + 1, width: cw - 2, height: ch - 2, rx: 3, fill: ramp(t)}),
+        text(x + cw / 2, y + ch / 2 + 5, String(cell.beste), {"text-anchor": "middle", "font-size": 14, "font-weight": 700, class: t > 0.45 ? "on-dark" : "on-light"}));
+      const hit = el("rect", {x, y, width: cw, height: ch, class: "hit"});
+      hit.addEventListener("mousemove", event => showTip(event, `<b>Minimumlast ${nf(m, 0)} %, vaste kosten ${nf(f, 2)} M€ per module</b>
+        <br>Goedkoopst: ${label(cell.beste)}, ${nf(cell.lcoh_eur_kg, 2)} €/kg<br>${label(data.modules[0])}: ${nf(cell.lcoh_een_eur_kg, 2)} €/kg`));
+      hit.addEventListener("mouseleave", hideTip);
+      svg.append(hit);
+    });
+  });
+  data.vaste_kosten_meur.forEach((f, j) => svg.append(text(L + j * cw + cw / 2, T + rows * ch + 16, nf(f, 2), {"text-anchor": "middle"})));
+  svg.append(text(L + (W - L - R) / 2, T + rows * ch + 34, "Vaste kosten per module (M€)", {"text-anchor": "middle", class: "on-light"}),
+    text(4, T - 2, "Minimumlast", {class: "on-light"}));
+  // Omrand het vak dat het dichtst bij de huidige aannames ligt.
+  const nearest = (list, v) => list.reduce((best, x, k) => Math.abs(x - v) < Math.abs(list[best] - v) ? k : best, 0);
+  const nx = L + nearest(data.vaste_kosten_meur, data.nu.vaste_kosten_meur) * cw, ny = cy(nearest(data.minimumlast, data.nu.minimumlast));
+  svg.append(el("rect", {x: nx - 1, y: ny - 1, width: cw + 2, height: ch + 2, rx: 4, fill: "none", stroke: "#fff", "stroke-width": 6}),
+    el("rect", {x: nx - 1, y: ny - 1, width: cw + 2, height: ch + 2, rx: 4, fill: "none", stroke: COLORS.accent, "stroke-width": 3}));
+  // Legenda: één blokje per aantal modules.
+  const lw = Math.min(46, (W - L - R) / data.modules.length);
+  data.modules.forEach((n, k) => {
+    const x = L + k * lw, y = H - 38;
+    svg.append(el("rect", {x, y, width: lw - 3, height: 16, rx: 2, fill: ramp(tone(n))}),
+      text(x + (lw - 3) / 2, y + 12, String(n), {"text-anchor": "middle", "font-size": 11, class: tone(n) > 0.45 ? "on-dark" : "on-light"}));
+  });
+  svg.append(text(L + data.modules.length * lw + 8, H - 26, "modules", {class: "on-light"}),
+    el("rect", {x: L, y: H - 16, width: 22, height: 13, rx: 2, fill: "none", stroke: COLORS.accent, "stroke-width": 2.5}),
+    text(L + 30, H - 5, `huidige aannames (${nf(data.nu.minimumlast, 0)} %, ${nf(data.nu.vaste_kosten_meur, 2)} M€) of het dichtstbijzijnde vak`, {class: "on-light"}));
+  $("switch-map").replaceChildren(svg);
+}
+
+// ---------------------------------------------------------------- scenario
+
+function loadScenario() {
+  const changed = document.querySelectorAll(".field input.changed").length;
+  if (changed && !confirm(`Het scenario zet alle velden op de waarden voor ${meta.technologieen.alkaline_hoog.naam}. ${changed} eigen ${changed === 1 ? "wijziging vervalt" : "wijzigingen vervallen"}.`)) return;
+  buildForm({...selection(), technologie: "alkaline_hoog", aannames: {}, modules: meta.modules.filter(n => n <= 8)});
+  remember();
+  drawExplainers();
+  $("form").requestSubmit();
 }
 
 function headline(rows, result) {
@@ -479,6 +643,8 @@ function render(result) {
   const rows = result.rijen;
   $("results").hidden = false;
   headline(rows, result);
+  winner(rows);
+  setupMap(result);
   lineWithRange("h2-chart", rows, "waterstof_t", "ton", 0);
   fixedCostChart(rows, result.aannames.vaste_kosten_module_meur);
   const net = revenuePerKg(result) > 0;
@@ -665,6 +831,7 @@ async function start() {
     drawExplainers();
   });
   $("day-run").addEventListener("click", runDay);
+  $("scenario-run").addEventListener("click", loadScenario);
   $("step").addEventListener("input", event => selectStep(Number(event.target.value)));
   $("day-count").addEventListener("change", runDay);
   addEventListener("scroll", hideTip, {passive: true});

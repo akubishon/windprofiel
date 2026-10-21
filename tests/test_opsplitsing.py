@@ -169,6 +169,54 @@ class OpsplitsingTests(unittest.TestCase):
         break_even(rows, STILL)
         self.assertEqual(rows[1]["opsplitsen"], "loont_niet")
 
+    def test_high_minimum_load_scenario_exists_and_hours_count_production(self):
+        name, a = TECHNOLOGIES["alkaline_hoog"]
+        self.assertEqual((a.minimumlast, a.vaste_kosten_module_meur), (0.40, 0.3))
+        self.assertEqual(a.systeemverbruik_vol, TECHNOLOGIES["alkaline"][1].systeemverbruik_vol)
+        # Twee uur zwak (onder de drempel van één module, boven die van vier), twee uur sterk.
+        flat = supply([10.0] * 12 + [40.0] * 12)
+        a = replace(a, onderhoud_dagen=0, storingen_per_jaar=0, startvertraging_min=0, min_aan_min=0, min_uit_min=0,
+                    opstart_warm_min=0, opstart_koud_min=0)
+        one, four = (simulate(flat, n, a, "verdelen") for n in (1, 4))
+        scale = 8760 / 4
+        self.assertAlmostEqual(one["productie_uur"], 2 * scale)
+        self.assertAlmostEqual(four["productie_uur"], 4 * scale)
+
+    def test_marginal_step_says_whether_the_average_drops(self):
+        flat = supply([3.0] * 200 + [8.0] * 200 + [30.0] * 200)
+        rows = [summarise([simulate(flat, n, STILL, "verdelen")], STILL) for n in (1, 2, 4)]
+        self.assertTrue(all(b["waterstof_t"] > a["waterstof_t"] for a, b in zip(rows, rows[1:])))
+        break_even(rows, STILL)
+        self.assertEqual(sum(r["beste"] for r in rows), 1)
+        best = min(rows, key=lambda r: r["lcoh_eur_kg"])
+        self.assertTrue(best["beste"])
+        for before, row in zip(rows, rows[1:]):
+            extra = (row["kosten_meur_jaar"] - before["kosten_meur_jaar"]) * 1e6 / ((row["waterstof_t"] - before["waterstof_t"]) * 1000)
+            self.assertAlmostEqual(row["marginale_eur_kg"], extra)
+            # Extra kilo's goedkoper dan het gemiddelde ervoor ⇔ de LCOH daalt.
+            self.assertEqual(row["stap_loont"], row["marginale_eur_kg"] < before["lcoh_eur_kg"])
+            self.assertEqual(row["extra_productie_uur"], row["productie_uur"] - before["productie_uur"])
+
+    def test_switch_map_gives_best_count_per_cell(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        from windprofiel import opsplitsing
+        flat = supply([3.0] * 300 + [30.0] * 300)
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(opsplitsing, "supply_year", lambda year: flat), \
+                mock.patch.object(opsplitsing, "CACHE", Path(folder)):
+            data = opsplitsing.omslagkaart(STILL, [2024], [1, 2, 4], "verdelen", workers=2)
+            self.assertEqual(opsplitsing.omslagkaart(STILL, [2024], [1, 2, 4], "verdelen"), data)   # uit de cache
+        self.assertEqual(len(data["cellen"]), len(opsplitsing.OMSLAG_MINIMUMLAST))
+        for line in data["cellen"]:
+            self.assertEqual(len(line), len(opsplitsing.OMSLAG_VASTE_KOSTEN))
+            for cell in line:
+                self.assertIn(cell["beste"], [1, 2, 4])
+                self.assertLessEqual(cell["lcoh_eur_kg"], cell["lcoh_een_eur_kg"] + 1e-9)
+            # Duurdere modules maken opsplitsen nooit aantrekkelijker.
+            counts = [cell["beste"] for cell in line]
+            self.assertEqual(counts, sorted(counts, reverse=True))
+
     def test_sensitivity_varies_one_assumption_by_a_quarter_within_bounds(self):
         (low, cheaper), (high, dearer) = variants(STILL, "stroomprijs_eur_mwh")
         self.assertAlmostEqual(low, STILL.stroomprijs_eur_mwh * 0.75)

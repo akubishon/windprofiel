@@ -102,6 +102,26 @@ lijn past beter bij wat het park zelf levert dan één station. Beabuorren houdt
   stroom per kilo en stackvervanging. Een tornadografiek toont welke aanname dat verschil
   het sterkst verschuift (elke aanname 25 % lager en hoger). Loont opsplitsen ook gratis
   niet, dan staat er "loont niet" in plaats van een negatief bedrag.
+- **Beste aantal modules, stap voor stap**: per extra module wat de extra kilo's kosten,
+  naast de gemiddelde kosten per kilo ervoor. Zijn de extra kilo's goedkoper, dan zakt het
+  gemiddelde en loont de stap. Ook het aantal uren per jaar waarin waterstof wordt gemaakt.
+  De **omslagkaart** toont het goedkoopste aantal bij elke combinatie van minimumlast
+  (10–50 %) en vaste kosten per module (0–1,5 M€).
+- **Scenario "Wanneer wint 4 modules?"**: alkaline met 40 % minimumlast en 0,3 M€ vaste
+  kosten per module. Met de standaardwaarden wint bijna altijd 2: bij 10–20 % minimumlast
+  vangt één grote module de zwakke wind al grotendeels, en 1 M€ per extra unit is veel.
+  Met een hoge minimumlast staat één module van 44 MW onder ~18 MW stil, terwijl een
+  module van 11 MW al vanaf ~4,5 MW draait. Windjaar 2025, `verdelen`:
+
+  | Scenario | Goedkoopst | LCOH 1 module → goedkoopst |
+  |---|---|---|
+  | PEM standaard | 2 modules | 8,11 → 8,07 €/kg |
+  | Alkaline standaard (20 %) | 2 modules | 8,01 → 7,95 €/kg |
+  | Alkaline, 40 % minimumlast | 3 modules | 8,39 → 8,07 €/kg |
+  | Alkaline, 40 %, 0,3 M€ per module | **4 modules** | 8,65 → 8,21 €/kg |
+
+  In het laatste scenario wordt met 4 modules 6255 uur per jaar waterstof gemaakt, tegen
+  3468 uur met 1 module.
 - **Een dag van dichtbij** vergelijkt het verbruik van 1 module en N modules per tien minuten.
   Kies een moment in de grafiek: zes kaarten rekenen dat moment met de echte getallen door,
   van KNMI-wind tot kilo's waterstof.
