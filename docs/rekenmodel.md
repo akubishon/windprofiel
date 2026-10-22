@@ -7,19 +7,17 @@ in de webapp onder **Formules, werking en bronnen**.
 
 ## 1. Wind op ashoogte
 
-\[
+```math
 v_h=v_{10}\left(\frac{h}{10}\right)^\alpha
-\]
-
+```
 `v₁₀` is KNMI-variabele `ff`: windsnelheid in m/s, representatief voor 10 meter.
 `h` is de ashoogte in meters. `α` bepaalt de toename met de hoogte. Fryslân
 gebruikt `h = 115 m` en een exponent die met het seizoen meebeweegt;
 Beabuorren `h = 60 m, α = 0,20`:
 
-\[
-\alpha_\mathrm{Fryslân}(n)=0{,}115+0{,}065\cos\left(\frac{2\pi(n-1)}{365}\right)
-\]
-
+```math
+\alpha_\text{Fryslân}(n)=0{,}115+0{,}065\cos\left(\frac{2\pi(n-1)}{365}\right)
+```
 `n` is het dagnummer in het jaar (1 = 1 januari). Begin januari is `α` 0,18,
 begin juli 0,05, in april en oktober circa 0,115.
 In de webapp is per park een eigen `α` in te vullen (0 tot 0,6); die geldt dan
@@ -41,7 +39,7 @@ alleen hoogte, niet de afstand of terreinverschillen tussen station en park.
 
 Met `v = v_h` geldt per turbine:
 
-\[
+```math
 P(v)=\begin{cases}
 0 & v<3\\
 4300\dfrac{v^3-3^3}{11{,}5^3-3^3} & 3\leq v<11{,}5\\
@@ -49,8 +47,7 @@ P(v)=\begin{cases}
 0 & v>25
 \end{cases}
 \quad[\mathrm{kW}]
-\]
-
+```
 De aanloop is genormaliseerd: bij 3 m/s is de teller nul, bij 11,5 m/s is teller
 gelijk aan noemer en wordt 4.300 kW bereikt. Anders dan `(v−3)³` gebruikt dit
 model `v³−3³`. Er is geen bewijs dat deze eenvoudige curve nauwkeuriger is dan
@@ -59,11 +56,10 @@ keuze die bij de afgesproken vereenvoudiging past.
 
 De derde macht is geïnspireerd op:
 
-\[
+```math
 P_\mathrm{wind}=\frac12\rho A v^3,\qquad
 P_\mathrm{turbine}=C_p P_\mathrm{wind}
-\]
-
+```
 Hier is `ρ` de luchtdichtheid, `A` het rotoroppervlak en `Cₚ` de
 omzettingsefficiëntie, die in werkelijkheid met de wind en regeling verandert.
 De [U.S. Department of Energy Small Wind Guidebook](https://windexchange.energy.gov/small-wind-guidebook)
@@ -80,10 +76,9 @@ raamwerk. Dit model bevat geen stormregeling of herstartvertraging.
 
 Voor twee omliggende curvepunten `(v₀, P₀)` en `(v₁, P₁)`:
 
-\[
+```math
 P(v)=P_0+(P_1-P_0)\frac{v-v_0}{v_1-v_0}
-\]
-
+```
 Dit is lineaire interpolatie: een snelheid halverwege twee punten geeft het
 vermogen halverwege die punten. De punten komen uit de grafiek voor
 [Siemens SWT-1.3-62](https://en.wind-turbine-models.com/turbines/1457-siemens-swt-1-3-62).
@@ -94,22 +89,18 @@ bij precies 25 m/s van het gekozen Fryslân-scenario.
 
 ## 4. Parken optellen en energie berekenen
 
-\[
+```math
 P_\mathrm{park}[\mathrm{MW}]=\frac{N\,P_\mathrm{turbine}[\mathrm{kW}]}{1000}
-\]
-
-\[
-P_\mathrm{samen}(t)=P_\mathrm{Fryslân}(t)+P_\mathrm{Beabuorren}(t)
-\]
-
-\[
+```
+```math
+P_\mathrm{samen}(t)=P_\text{Fryslân}(t)+P_\mathrm{Beabuorren}(t)
+```
+```math
 E_\mathrm{dag}[\mathrm{MWh}]\approx\sum_t\frac{P_\mathrm{minuut}(t)[\mathrm{MW}]}{60}
-\]
-
-\[
+```
+```math
 \mathrm{vollasturen}=\frac{E[\mathrm{MWh}]}{P_\mathrm{nominaal}[\mathrm{MW}]}
-\]
-
+```
 Vollasturen zijn het aantal uren dat het park op vol vermogen had moeten draaien
 voor dezelfde opbrengst: 382,7 MW voor Fryslân, 10,4 MW voor Beabuorren en
 393,1 MW samen. Voor een geselecteerd tijdvak gelden dezelfde formules, met de
@@ -126,14 +117,13 @@ dagopbrengst onbekend; ontbrekende productie wordt nooit als nul opgeteld.
 Turbines in het zog van andere turbines vangen tragere en turbulentere wind.
 Standaard benaderen we dat met één parkgemiddelde snelheidsverlaging `d`:
 
-\[
+```math
 v_\mathrm{eff}=v_h(1-d),\qquad
 P_\mathrm{turbine}=\begin{cases}
 P(v_\mathrm{eff}) & P(v_h)>0\\
 0 & \text{anders}
 \end{cases}
-\]
-
+```
 Fryslân gebruikt `d = 0,05` (89 turbines dicht bij elkaar), Beabuorren
 `d = 0,02` (8 turbines). Via de vermogenscurve is het verlies vanzelf het
 grootst in de aanloop en klein of nul bij harde wind: bij `v_h = 8 m/s` geeft
@@ -151,10 +141,9 @@ meenemen** of `wake=0` in de API wordt de correctie uitgeschakeld.
 
 ## 6. Tijd en zichtbare punten
 
-\[
+```math
 v(t)=v_0+(v_1-v_0)\frac{t-t_0}{t_1-t_0}
-\]
-
+```
 De [KNMI-documentatie](https://dataplatform.knmi.nl/dataset/docs/10-minute-in-situ-meteorological-observations-1-0)
 beschrijft tienminutengemiddelden met een tijdstempel aan het intervaleinde in
 UTC. We plaatsen het gemiddelde op het intervalmidden, vijf minuten eerder,
