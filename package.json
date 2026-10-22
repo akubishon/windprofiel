@@ -1,0 +1,25 @@
+{
+  "name": "fryslan-production-explorer",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "compose": "node scripts/compose-worker.mjs",
+    "build": "bash scripts/build.sh && node scripts/validate-artifact.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "1.31.0",
+    "pyodide": "0.29.3",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "esbuild": "0.28.0",
+    "typescript": "5.9.3"
+  }
+}

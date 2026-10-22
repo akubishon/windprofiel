@@ -5,3 +5,12 @@ __pycache__/
 .cache/
 uitvoer/
 scenarios/
+node_modules/
+dist/
+.env*
+!.env.example
+.sites-runtime/
+.wrangler/
+outputs/
+work/
+*.tsbuildinfo

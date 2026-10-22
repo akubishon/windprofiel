@@ -231,3 +231,9 @@ python3 -m windprofiel.preview --dates 2025-06-01 2025-06-02 --output voorbeeld.
 ```
 
 De HTML bevat winddata en modeluitkomsten, nooit de API-sleutel.
+
+## Website (Fryslân production explorer)
+
+De broncode van de gehoste website staat in `src/`, `worker/`, `scripts/` en
+`package.json` (Node.js 22+). Zie [README-website.md](README-website.md) voor
+starten, bouwen en configuratie; de Node-tests draaien met `npm test`.
