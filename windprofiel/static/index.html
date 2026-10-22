@@ -10,7 +10,7 @@
     <header>
       <div class="eyebrow">WINDENERGIE · FRYSLÂN</div>
       <h1>Een dag in de wind.</h1>
-      <p>Bekijk het geschatte vermogen van twee windparken, op basis van KNMI-metingen.</p>
+      <p>Wind op ashoogte en de gemodelleerde mogelijke opbrengst van twee windparken, uit KNMI-windmetingen. Voor Windpark Fryslân staat de gemeten dagproductie ernaast.</p>
       <a class="page-link" href="/opsplitsing">Elektrolyser opsplitsen: één grote of meerdere modules? →</a>
     </header>
 
@@ -33,9 +33,10 @@
     <p id="status" role="status" aria-live="polite">App starten… Geen verandering? Start de Python-webserver zoals beschreven in de README.</p>
     <section class="dashboard" id="dashboard" aria-label="Productieoverzicht">
       <div class="dashboard-head">
-        <h2>Geschatte productie</h2>
+        <h2>Gemodelleerde mogelijke opbrengst</h2>
         <span id="dashboard-period"></span>
       </div>
+      <p class="dashboard-note">Model: turbinecurve, zogverlies en 100 % beschikbaarheid, zonder afregeling, stilstand of netbeperking. Geen gemeten productie.</p>
       <div class="tiles">
         <article class="tile" data-park="fryslan">
           <div class="tile-label">Windpark Fryslân</div>
@@ -71,9 +72,29 @@
           </dl>
         </article>
       </div>
+      <div class="dashboard-extra">
+        <article class="extra" id="measured">
+          <h3>Gemeten productie Windpark Fryslân</h3>
+          <dl>
+            <div><dt>Gemeten dagproductie</dt><dd data-fact="measured">—</dd></div>
+            <div><dt>Model: mogelijke dagopbrengst</dt><dd data-fact="model">—</dd></div>
+            <div><dt>Verschil tussen model en gemeten productie</dt><dd data-fact="difference">—</dd></div>
+          </dl>
+          <p class="note" data-fact="note">Dagtotalen 2022–2025 uit de app van Windpark Fryslân.</p>
+        </article>
+        <article class="extra" id="hydrogen">
+          <h3>Naar de waterstofsimulatie</h3>
+          <dl>
+            <div><dt>Fryslân (10 % van het model)</dt><dd data-fact="fryslan">—</dd></div>
+            <div><dt>Beabuorren (100 % van het model)</dt><dd data-fact="beabuorren">—</dd></div>
+            <div><dt>Bruto aanbod vóór BoP</dt><dd data-fact="total">—</dd></div>
+          </dl>
+          <p class="note">Hetzelfde aandeel als op mijnwindpark.nl en in de opsplitsingsberekening.</p>
+        </article>
+      </div>
     </section>
     <noscript>Schakel JavaScript in om de KNMI-data en grafieken te laden.</noscript>
-    <aside class="notice">Minuutwaarden zijn schattingen uit tienminutengemiddelden. Dit is geen gemeten elektriciteitsproductie.</aside>
+    <aside class="notice">De dagopbrengst is opgeteld uit de tienminutenwaarden; de minuutlijn is geïnterpoleerd voor de grafiek. Modelvermogen is geen gemeten elektriciteitsproductie.</aside>
     <aside class="notice" id="preview-notice" hidden>
       Zelfstandige voorbeeldpagina met opgeslagen echte KNMI-data. Deze pagina bevat de onderstaande dagen en gebruikt
       de standaardstations. Voor andere dagen, stations of curve-upload start je de Python-webserver volgens de README.
@@ -83,11 +104,11 @@
     <label class="point-toggle"><input type="checkbox" id="show-points" checked> Toon tienminutenpunten · vermogen berekend uit de oorspronkelijke windgemiddelden</label>
     <label class="point-toggle"><input type="checkbox" id="wake" checked> Zogverlies meenemen · scenario: wind 5 % lager in Fryslân, 2 % in Beabuorren</label>
     <fieldset class="alpha-controls">
-      <legend>Hoogte-exponent α in v<sub>h</sub> = v<sub>10</sub> × (h / 10)<sup>α</sup></legend>
+      <legend>Hoogtevertaling van 10 m naar ashoogte, uitgedrukt als α in v<sub>h</sub> = v<sub>10</sub> × (h / 10)<sup>α</sup></legend>
       <label>Fryslân <input id="alpha-fryslan" type="text" inputmode="decimal" size="5" autocomplete="off"></label>
       <label>Beabuorren <input id="alpha-beabuorren" type="text" inputmode="decimal" size="5" autocomplete="off"></label>
       <button id="alpha-reset" type="button">Standaard</button>
-      <small>Leeg = standaard (Fryslân per seizoen, Beabuorren 0,20); toegestaan 0 tot 0,6. Hoger α geeft meer wind op ashoogte.</small>
+      <small>Leeg = standaard: factor per maand uit de HARMONIE-heranalyse WINS50 (2019–2021) op de parklocatie; grijs staat de gelijkwaardige α. Een eigen α (0 tot 0,6) is een aanname om de gevoeligheid te zien.</small>
     </fieldset>
     <div id="charts">
       <section class="card" id="fryslan">
@@ -98,9 +119,10 @@
         <div class="plot"></div>
         <div class="range"><span></span><button type="button" hidden>Wis selectie</button></div>
         <div class="source"></div>
+        <h3 class="series-title">Wind op ashoogte</h3>
+        <div class="windplot"></div>
         <details>
-          <summary>Wind en modelaannames</summary>
-          <div class="windplot"></div>
+          <summary>Station, hoogtevertaling en modelaannames</summary>
           <p class="assumptions"></p>
           <p class="curve-source"></p>
         </details>
@@ -113,16 +135,17 @@
         <div class="plot"></div>
         <div class="range"><span></span><button type="button" hidden>Wis selectie</button></div>
         <div class="source"></div>
+        <h3 class="series-title">Wind op ashoogte</h3>
+        <div class="windplot"></div>
         <details>
-          <summary>Wind en modelaannames</summary>
-          <div class="windplot"></div>
+          <summary>Station, hoogtevertaling en modelaannames</summary>
           <p class="assumptions"></p>
           <p class="curve-source"></p>
         </details>
       </section>
       <section class="card" id="combined">
         <div class="card-head">
-          <div><span class="eyebrow">BEIDE PARKEN · 393,1 MW</span><h2>Gecombineerd vermogen</h2></div>
+          <div><span class="eyebrow">BEIDE PARKEN · 393,1 MW</span><h2>Gecombineerd modelvermogen</h2></div>
           <div class="energy">—</div>
         </div>
         <div class="plot"></div>
@@ -133,7 +156,7 @@
 
     <details class="settings">
       <summary>Meetstations en vermogenscurves</summary>
-      <p>Meetstations liggen buiten de parken. De standaardkeuze gebruikt Houtribdijk voor het IJsselmeer (geijkt op productiedagen) en Stavoren, het dichtstbijzijnde station, voor Beabuorren. Je kunt per park een ander station kiezen.</p>
+      <p>Meetstations liggen buiten de parken. Standaard krijgen beide parken per tien minuten het gemiddelde van de twee KNMI-stations op het IJsselmeer: Houtribdijk (midden in het meer) en Stavoren (aan de Friese kust, 13 km van Windpark Fryslân). Ontbreekt één van beide, dan blijft dat moment leeg. Die keuze volgt uit de ligging en uit een vergelijking met de HARMONIE-heranalyse WINS50 op de parklocaties, niet uit productiecijfers. Kies je hier één ander station, dan geldt alleen dat station, met zijn eigen WINS50-factor als die bekend is.</p>
       <div class="settings-grid">
         <div>
           <label for="station-fryslan">KNMI-station voor Fryslân</label>
@@ -155,21 +178,21 @@
     <details class="settings" id="formulas">
       <summary>Formules, werking en bronnen</summary>
       <h3>1. Van KNMI-wind naar wind op ashoogte</h3>
-      <div class="formula">v<sub>h</sub> = v<sub>10</sub> × (h / 10)<sup>α</sup></div>
-      <p>v<sub>10</sub> is de KNMI-windsnelheid op 10 meter in m/s; h is de ashoogte in meters. α beschrijft hoe snel de wind met de hoogte toeneemt. Fryslân gebruikt h = 115 m en een seizoensexponent α = 0,115 + 0,065 × cos(2π(n − 1)/365), met n het dagnummer: 0,18 in de winter, 0,05 in de zomer. Beabuorren gebruikt h = 60 m en α = 0,20. De Fryslân-exponent is geijkt op tien productiedagen uit 2025 en 2026; geen van beide is een lokale meting. Deze omzetting beïnvloedt de omvang van de vermogensschommelingen.</p>
-      <p><a href="https://en.wikipedia.org/wiki/Wind_profile_power_law" target="_blank" rel="noopener">Achtergrond: wind profile power law</a> beschrijft de formule en de afhankelijkheid van terrein en atmosferische stabiliteit. De bron noemt ongeveer 0,11 boven water in neutrale lucht; in stabiele winterlucht is de toename met de hoogte groter. Met 0,10 schatte het model de Fryslân-productie tot factor 2,7 te laag. 0,20 voor land is onze modelkeuze en niet specifiek voor Beabuorren vastgesteld.</p>
+      <div class="formula">v<sub>h</sub> = F<sub>maand</sub> × v<sub>10</sub>, &nbsp; F = Σ v<sub>h</sub>(WINS50, parklocatie) / Σ v<sub>10</sub>(stations)</div>
+      <p>v<sub>10</sub> is de KNMI-windsnelheid ff (representatief voor 10 m), het gemiddelde van Houtribdijk en Stavoren. F is per park en per kalendermaand afgeleid uit de <a href="https://dataplatform.knmi.nl/dataset/wins50-ctl-nl-daily-3d-2" target="_blank" rel="noopener">KNMI-heranalyse WINS50</a> (HARMONIE-AROME, 2,5 km, run zonder windparken, 2019–2021): de modelwind op ashoogte op de parklocatie gedeeld door de gemeten stationswind op dezelfde uren. Voor 115 m wordt tussen de modelniveaus 100 en 120 m geïnterpoleerd; Beabuorren gebruikt het niveau 60 m. F bevat zo de toename met de hoogte én het verschil tussen de stations en de parklocatie. Ter vergelijking staat F ook als exponent α vanaf 10 m in het invulveld.</p>
+      <p><strong>Productiecijfers zijn niet gebruikt.</strong> De oude seizoensexponent (0,18 winter, 0,05 zomer) was op productie van Windpark Fryslân afgesteld en blijft alleen beschikbaar om te vergelijken. WINS50 is een model, geen meting op ashoogte; zonder onafhankelijke meting blijft F een aanname. De gevoeligheid daarvoor staat in <code>docs/vergelijking.md</code>.</p>
       <h3>2. Fryslân: benaderd vermogen per turbine</h3>
       <p>Hier is v de geschatte wind op ashoogte, niet de ruwe KNMI-wind op 10 meter.</p>
       <div class="formula">P(v) = 0 kW bij v &lt; 3 m/s<br>P(v) = 4.300 × (v³ − 3³) / (11,5³ − 3³) kW bij 3 ≤ v &lt; 11,5<br>P(v) = 4.300 kW bij 11,5 ≤ v ≤ 25<br>P(v) = 0 kW bij v &gt; 25</div>
       <p>Door 3³ af te trekken begint de aanloop bij nul. Delen door (11,5³ − 3³) zorgt dat de verhouding bij 11,5 m/s precies één wordt: de turbine bereikt dan 4.300 kW. De derde macht maakt dat kleine windveranderingen in het aanloopgebied grotere vermogensveranderingen kunnen geven. Op het plateau neemt het vermogen niet verder toe. Het plotseling uitschakelen boven 25 m/s is een vereenvoudiging; stormregeling en herstartvertraging zijn niet gemodelleerd.</p>
       <p><a href="https://windexchange.energy.gov/small-wind-guidebook" target="_blank" rel="noopener">U.S. Department of Energy: Small Wind Guidebook</a> legt het verband P = ½ × C<sub>p</sub> × ρ × A × v³ uit. Dat ondersteunt de kubische achtergrond, maar bewijst onze genormaliseerde curve niet. C<sub>p</sub> is de omzettingsefficiëntie, ρ de luchtdichtheid en A het rotoroppervlak; die behandelen we niet afzonderlijk in dit eenvoudige model.</p>
-      <p><strong>3, 11,5 en 25 m/s zijn de afgesproken scenario-aannames.</strong> Er is geen gecontroleerde fabrikantbron gevonden die deze grenzen voor de 4,3 MW-uitvoering bevestigt. Het nominale vermogen en het aantal turbines zijn gepubliceerd door <a href="https://www.windparkfryslan.nl/onderwerpen/windturbines/" target="_blank" rel="noopener">Windpark Fryslân</a>. De <a href="https://www.windparkfryslan.nl/wp-content/uploads/2020/05/Factsheet-Windpark-Fryslan.pdf" target="_blank" rel="noopener">factsheet</a> geeft 180 m tiphoogte en 130 m rotordiameter; daaruit volgt h ≈ 180 − 130/2 = 115 m.</p>
+      <p><strong>3, 11,5 en 25 m/s zijn de afgesproken scenario-aannames.</strong> Er is geen gecontroleerde fabrikantbron gevonden die deze grenzen voor de 4,3 MW-uitvoering bevestigt. Het nominale vermogen en het aantal turbines zijn gepubliceerd door <a href="https://www.windparkfryslan.nl/onderwerpen/windturbines/" target="_blank" rel="noopener">Windpark Fryslân</a>. Windpark Fryslân noemt een <a href="https://www.windparkfryslan.nl/onderwerpen/windturbines/" target="_blank" rel="noopener">hoogte boven water van 180 m</a> en de <a href="https://www.windparkfryslan.nl/wp-content/uploads/2020/05/Factsheet-Windpark-Fryslan.pdf" target="_blank" rel="noopener">factsheet</a> 130 m rotordiameter; daaruit volgt h ≈ 180 − 130/2 = 115 m boven water. Het inpassingsplan meet hoogtes vanaf NAP; het IJsselmeerpeil ligt 0,2 tot 0,4 m onder NAP. Een persbericht uit 2018 noemde 109 m ashoogte; dat zit in de gevoeligheidsanalyse.</p>
       <h3>3. Beabuorren: tussen gepubliceerde curvepunten</h3>
       <div class="formula">P(v) = P₀ + (P₁ − P₀) × (v − v₀) / (v₁ − v₀)</div>
       <p>We zoeken de twee omliggende curvepunten (v₀, P₀) en (v₁, P₁) en rekenen lineair tussen hun vermogens. Bron: <a href="https://en.wind-turbine-models.com/turbines/1457-siemens-swt-1-3-62" target="_blank" rel="noopener">Siemens SWT-1.3-62 in Wind-Turbine-Models</a>. Dit is een secundaire curve; referentieluchtdichtheid en certificering zijn onbekend. In dit model is vermogen nul vanaf 25 m/s. <a href="https://rengineers.eu/nieuw/wynpark-beaborren-25-jaar/" target="_blank" rel="noopener">Rengineers</a> bevestigt acht turbines en 10,4 MW. De aangenomen ashoogte van 60 m komt uit <a href="https://tsjerkwert.nl/start-opschaling-van-het-wynpark/" target="_blank" rel="noopener">lokaal nieuws uit 2007</a> en is nog niet voor alle acht turbines bevestigd.</p>
       <h3>4. Parkvermogen, som en dagopbrengst</h3>
-      <div class="formula">P<sub>park</sub> [MW] = aantal turbines × P<sub>turbine</sub> [kW] / 1.000<br>P<sub>samen</sub>(t) = P<sub>Fryslân</sub>(t) + P<sub>Beabuorren</sub>(t)<br>E<sub>dag</sub> [MWh] ≈ Σ P<sub>minuut</sub> [MW] / 60</div>
-      <p>We vermenigvuldigen met 89 turbines voor Fryslân en 8 voor Beabuorren. Elke minuut duurt 1/60 uur. Meetgaten blijven leeg en maken de volledige dagopbrengst onbekend. Zogverlies is benaderd (zie 5); onderhoud, afregeling en verschillen tussen turbines zijn niet meegenomen.</p>
+      <div class="formula">P<sub>park</sub> [MW] = aantal turbines × P<sub>turbine</sub> [kW] / 1.000<br>P<sub>samen</sub>(t) = P<sub>Fryslân</sub>(t) + P<sub>Beabuorren</sub>(t)<br>E<sub>dag</sub> [MWh] = Σ P<sub>tien minuten</sub> [MW] / 6</div>
+      <p>We vermenigvuldigen met 89 turbines voor Fryslân en 8 voor Beabuorren. De dagopbrengst telt de 144 oorspronkelijke tienminutenwaarden van de Nederlandse kalenderdag op (138 of 150 bij de klokwissel), elk 1/6 uur. Meetgaten blijven leeg en maken de volledige dagopbrengst onbekend. Dit is de <strong>gemodelleerde mogelijke opbrengst</strong>: zogverlies is benaderd (zie 5), beschikbaarheid is 100 %, en onderhoud, afregeling, netbeperkingen en verschillen tussen turbines zijn niet meegenomen. De gemeten dagproductie van Windpark Fryslân staat er apart naast; het verschil heet verschil tussen model en gemeten productie en krijgt geen oorzaak toegeschreven.</p>
       <h3>5. Zogverlies</h3>
       <div class="formula">v<sub>eff</sub> = v<sub>h</sub> × (1 − d)<br>P<sub>turbine</sub> = P(v<sub>eff</sub>) als P(v<sub>h</sub>) &gt; 0, anders 0</div>
       <p>Turbines achter andere turbines vangen tragere, turbulentere wind. We benaderen dat met één gemiddelde snelheidsverlaging d per park: 5 % voor de 89 dicht opeengeplaatste turbines van Fryslân, 2 % voor de 8 turbines van Beabuorren. Door de vermogenscurve is het verlies vanzelf het grootst in de aanloop (3–11,5 m/s) en klein of nul bij harde wind, wanneer ook de trage wind nog boven nominaal ligt. In- en uitschakelen volgt de ongestoorde wind.</p>

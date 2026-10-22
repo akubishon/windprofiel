@@ -49,7 +49,18 @@ class ScenarioTests(unittest.TestCase):
             self.assertEqual(len(listing(folder)), 1)
             lines = write_overview(folder).read_text(encoding="utf-8").splitlines()
             self.assertEqual(len(lines), 1 + 2)
-            self.assertTrue(lines[1].startswith("Test · verdelen,pem,2024,verdelen,1,"))
+            # Zonder windmethode in het resultaat is het een uitkomst van vóór modelversie 11: de oude opsplitsing.
+            self.assertTrue(lines[1].startswith("Test · verdelen,pem,2024,productie_hoogste,verdelen,1,"))
+            self.assertTrue(listing(folder)[0]["verouderd"])
+
+    def test_current_results_are_not_marked_outdated(self):
+        from windprofiel.opsplitsing import MODEL_VERSION
+        with tempfile.TemporaryDirectory() as name:
+            folder = Path(name)
+            save("Nieuw", "pem", {}, {**result(), "windmethode": "onafhankelijk", "model_versie": MODEL_VERSION}, folder)
+            [item] = listing(folder)
+            self.assertFalse(item["verouderd"])
+            self.assertEqual(item["windmethode"], "onafhankelijk")
 
     def test_load_refuses_paths_outside_the_folder(self):
         with tempfile.TemporaryDirectory() as name:

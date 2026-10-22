@@ -290,9 +290,42 @@ function updateDashboard(range) {
 function showEnergy(element, energy, id, until = null) {
   element.replaceChildren(document.createTextNode(energy === null ? "—" : `${format(energy)} MWh`));
   const small = document.createElement("small");
-  const label = until ? `GESCHATTE OPBRENGST TOT ${until.slice(11, 16)}` : "GESCHATTE DAGOPBRENGST";
+  const label = until ? `MODEL: MOGELIJK TOT ${until.slice(11, 16)}` : "MODEL: MOGELIJKE DAGOPBRENGST";
   small.textContent = energy === null ? label : `${format(energy / ratedMW(id), 1)} VOLLASTUREN · ${label}`;
   element.append(small);
+}
+
+const signed = (mwh) => `${mwh > 0 ? "+" : mwh < 0 ? "−" : ""}${format(Math.abs(mwh))} MWh`;
+
+// Gemeten dagproductie naast het model; het verschil krijgt geen oorzaak.
+function showMeasured(data) {
+  const box = $("measured");
+  const facts = Object.fromEntries([...box.querySelectorAll("[data-fact]")].map(el => [el.dataset.fact, el]));
+  const model = data?.parks.fryslan.energy_mwh ?? null;
+  facts.model.textContent = model === null ? "onbekend (meetgat of dag loopt nog)" : energyText(model);
+  if (!data?.measured) {
+    facts.measured.textContent = "niet in het archief";
+    facts.difference.textContent = "—";
+    facts.note.textContent = "Gemeten dagtotalen zijn opgeslagen voor 2022–2025 (app van Windpark Fryslân).";
+    return;
+  }
+  const m = data.measured;
+  facts.measured.textContent = energyText(m.energy_mwh);
+  const diff = m.model_minus_measured_mwh;
+  facts.difference.textContent = diff === null ? "—"
+    : `${signed(diff)} (${diff < 0 ? "model lager dan gemeten" : diff > 0 ? "model hoger dan gemeten" : "gelijk"})`;
+  facts.note.textContent = `${m.source}. ${m.note}`;
+}
+
+function showHydrogen(data) {
+  const box = $("hydrogen");
+  const facts = Object.fromEntries([...box.querySelectorAll("[data-fact]")].map(el => [el.dataset.fact, el]));
+  const parts = data?.hydrogen?.energy_mwh ?? {};
+  ["fryslan", "beabuorren"].forEach(id => {
+    facts[id].textContent = parts[id] === undefined || parts[id] === null ? "—" : `${format(parts[id])} MWh`;
+  });
+  const total = data?.hydrogen?.total_mwh ?? null;
+  facts.total.textContent = total === null ? "—" : `${format(total)} MWh`;
 }
 
 // ---------------------------------------------------------------------------
@@ -363,7 +396,10 @@ function alphaInput(id) {
 
 function parameters() {
   const params = new URLSearchParams({date: $("date").value});
-  ids.forEach(id => params.set(id, $("station-" + id).value));
+  // Leeg = standaardbron (gemiddelde van Houtribdijk en Stavoren); anders alleen het gekozen station.
+  ids.forEach(id => {
+    if ($("station-" + id).value) params.set(id, $("station-" + id).value);
+  });
   params.set("wake", $("wake").checked ? "1" : "0");
   ids.forEach(id => {
     if (alphaInput(id)) params.set("alpha_" + id, alphaInput(id));
@@ -386,18 +422,20 @@ function showPark(id, data) {
     : "Vermogen nog niet beschikbaar: voeg een curve voor de juiste turbine-uitvoering toe.";
   chart(card.querySelector(".plot"), park.power_mw, data.timestamps, "MW", noPower, "#32876c",
         referencePoints(park.reference_points, "power_mw"), true);
-  chart(card.querySelector(".windplot"), park.wind_ms, data.timestamps, "m/s op 10 m", "Geen bruikbare windmetingen.", "#749caf",
-        referencePoints(park.reference_points, "wind_ms"));
-  card.querySelector(".source").textContent =
-    `KNMI ${park.station.properties.name} · ${park.missing_wind_minutes} ontbrekende windminuten`;
+  chart(card.querySelector(".windplot"), park.hub_wind_ms, data.timestamps, `m/s op ${park.hub_height} m`,
+        "Geen bruikbare windmetingen.", "#749caf", referencePoints(park.reference_points, "hub_wind_ms"));
+  const names = park.stations.map(s => s.properties.name).join(park.station_rule === "hoogste" ? " of " : " en ");
+  card.querySelector(".source").textContent = `Wind: KNMI ${names}`
+    + (park.station_rule === "hoogste" ? " (per tien minuten de hoogste)" : "")
+    + ` · ${park.missing_intervals} van ${data.intervals} tienminutenwaarden ontbreken`;
 
   const wake = data.wake
     ? `Zogverlies: wind ${format(park.wake_deficit * 100, 0)} % lager voor alle turbines (scenario-aanname).`
     : "Zogverlies uitgeschakeld.";
   const alpha = park.alpha_custom
-    ? `Hoogte-exponent: α = ${format(park.alpha, 3)} (eigen waarde; standaard deze dag ${format(park.alpha_default, 3)}).`
-    : `Hoogte-exponent deze dag: α = ${format(park.alpha, 3)}.`;
-  card.querySelector(".assumptions").textContent = `${park.assumptions} ${alpha} ${wake}`;
+    ? ` Standaard deze dag: α ≈ ${format(park.alpha_default, 3)}.`
+    : "";
+  card.querySelector(".assumptions").textContent = `${park.height_method}${alpha} ${park.assumptions} ${wake}`;
   // De standaardwaarde van deze dag staat grijs in het lege veld.
   $("alpha-" + id).placeholder = format(park.alpha_default, 3);
   $("alpha-" + id).classList.toggle("custom", Boolean(park.alpha_custom));
@@ -432,6 +470,8 @@ function clearCharts() {
   charts.querySelectorAll(".plot,.windplot").forEach(el => el.replaceChildren());
   charts.querySelectorAll(".energy").forEach(el => el.textContent = "—");
   updateDashboard(null);
+  showMeasured(null);
+  showHydrogen(null);
 }
 
 async function load() {
@@ -449,7 +489,7 @@ async function load() {
   current = null;
   controls();
   updateDashboard(null);
-  $("status").textContent = "KNMI-metingen ophalen en minuutprofiel berekenen…";
+  $("status").textContent = "KNMI-metingen ophalen en modelprofiel berekenen…";
   try {
     const data = await request("/api/profile?" + parameters());
     if (call !== sequence) return;
@@ -466,6 +506,8 @@ async function load() {
           "Gecombineerd vermogen vereist een beschikbare curve én winddata voor beide parken.", "#32876c",
           referencePoints(data.combined_reference_points, "power_mw"), true);
     setSelection(null);
+    showMeasured(data);
+    showHydrogen(data);
     $("method").textContent = data.method;
     $("status").textContent = statusText(data);
   } catch (error) {
@@ -494,9 +536,9 @@ function downloadCsv() {
   const time = t => nlMoment(t)
     + (repeated && t.slice(11, 13) === "02" ? (t.endsWith("+02:00") ? " zomertijd" : " wintertijd") : "");
   const number = v => v === null ? "" : (v.toFixed(6).replace(/\.?0+$/, "") || "0").replace(".", ",");
-  const rows = [["tijd_Europe_Amsterdam", "fryslan_wind_10m_ms", "beabuorren_wind_10m_ms",
+  const rows = [["tijd_Europe_Amsterdam", "fryslan_stationswind_10m_ms", "beabuorren_stationswind_10m_ms",
                  "fryslan_wind_ashoogte_ms", "beabuorren_wind_ashoogte_ms",
-                 "fryslan_geschat_MW", "beabuorren_geschat_MW", "gecombineerd_geschat_MW"]];
+                 "fryslan_model_mogelijk_MW", "beabuorren_model_mogelijk_MW", "gecombineerd_model_mogelijk_MW"]];
   current.timestamps.forEach((t, i) => {
     const values = [a.wind_ms[i], b.wind_ms[i], a.hub_wind_ms[i], b.hub_wind_ms[i],
                     a.power_mw[i], b.power_mw[i], current.combined_mw[i]];
@@ -570,13 +612,17 @@ function fillStations(data) {
     .sort((a, b) => a.properties.name.localeCompare(b.properties.name));
   ids.forEach(id => {
     const select = $("station-" + id);
+    const standard = document.createElement("option");
+    standard.value = "";
+    standard.textContent = "Standaard: gemiddelde van Houtribdijk en Stavoren";
+    select.append(standard);
     stations.forEach(s => {
       const option = document.createElement("option");
       option.value = s.id;
       option.textContent = `${s.properties.name} (${s.properties.wmoId})`;
       select.append(option);
     });
-    select.value = data.parks[id].station;
+    select.value = "";
   });
 }
 

@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .application import PARKS, ROOT, build_profile, csv_rows, parse_alpha, validate_curve
 from .knmi import KNMIClient, KNMIError, load_env_file
-from . import opsplitsing, scenarios
+from . import opsplitsing, scenarios, windbron
 
 STATIC = Path(__file__).parent / "static"
 FILES = {"/": ("index.html", "text/html"), "/app.js": ("app.js", "text/javascript"), "/style.css": ("style.css", "text/css"),
@@ -65,9 +65,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
             query = parse_qs(request.query)
             selected = date.fromisoformat(query.get("date", [""])[0])
-            stations = {key: query.get(key, [park["station"]])[0] for key, park in PARKS.items()}
+            # Leeg of afwezig: de standaardbron (gemiddelde van beide IJsselmeerstations); anders precies dat ene station.
+            stations = {key: query.get(key, [""])[0] or None for key in PARKS}
             alphas = {key: parse_alpha(query.get("alpha_" + key, [None])[0]) for key in PARKS}
-            profile = build_profile(selected, stations, wake=query.get("wake", ["1"])[0] != "0", alphas=alphas)
+            method = query.get("windmethode", [windbron.DEFAULT])[0]   # oude methoden om te vergelijken
+            profile = build_profile(selected, stations, wake=query.get("wake", ["1"])[0] != "0", alphas=alphas, method=method)
             if request.path == "/api/profile":
                 self.json_response(200, profile)
                 return
@@ -77,7 +79,8 @@ class Handler(BaseHTTPRequestHandler):
         except KNMIError as exc:
             self.json_response(502, {"error": str(exc)})
         except (ValueError, TypeError):
-            self.json_response(400, {"error": "Controleer datum (vanaf 01-11-2021 tot en met vandaag), station, hoogte-exponent (0 tot 0,6) en vermogenscurve."})
+            self.json_response(400, {"error": "Controleer datum (vanaf 01-11-2021 tot en met vandaag), station, hoogte-exponent (0 tot 0,6), "
+                                              "windmethode en vermogenscurve."})
 
     def do_POST(self):
         path = urlsplit(self.path).path
@@ -116,6 +119,9 @@ class Handler(BaseHTTPRequestHandler):
             counts = body.get("modules", opsplitsing.MODULE_COUNTS)
             if strategy not in opsplitsing.STRATEGIES:
                 raise ValueError("Onbekende besturing.")
+            method = body.get("windmethode", windbron.DEFAULT)
+            if method not in windbron.METHODS:
+                raise ValueError("Onbekende windmethode.")
             if not isinstance(counts, list) or not counts or any(not isinstance(n, int) or isinstance(n, bool) or not 1 <= n <= opsplitsing.MAX_MODULES for n in counts):
                 raise ValueError(f"Kies moduleaantallen van 1 tot en met {opsplitsing.MAX_MODULES}.")
             if path in ("/api/opsplitsing", "/api/opsplitsing/gevoeligheid", "/api/opsplitsing/omslagkaart"):
@@ -123,19 +129,19 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(years, list) or not years or any(y not in opsplitsing.available_years() for y in years):
                     raise ValueError("Kies windjaren uit de lijst.")
                 if path == "/api/opsplitsing":
-                    self.json_response(200, opsplitsing.run(a, sorted(set(years)), counts, strategy))
+                    self.json_response(200, opsplitsing.run(a, sorted(set(years)), counts, strategy, method=method))
                 elif path == "/api/opsplitsing/omslagkaart":
-                    self.json_response(200, opsplitsing.omslagkaart(a, sorted(set(years)), counts, strategy))
+                    self.json_response(200, opsplitsing.omslagkaart(a, sorted(set(years)), counts, strategy, method=method))
                 else:
                     n = body.get("n")
                     if not isinstance(n, int) or isinstance(n, bool):
                         raise ValueError("Kies een aantal modules om te vergelijken.")
-                    self.json_response(200, opsplitsing.sensitivity(a, sorted(set(years)), n, strategy))
+                    self.json_response(200, opsplitsing.sensitivity(a, sorted(set(years)), n, strategy, method=method))
             else:
                 day = date.fromisoformat(str(body.get("datum", "")))
                 if day.year not in opsplitsing.available_years():
                     raise ValueError("Kies een dag in een van de windjaren.")
-                self.json_response(200, opsplitsing.day_trace(a, day, counts, strategy))
+                self.json_response(200, opsplitsing.day_trace(a, day, counts, strategy, method=method))
         except KNMIError as exc:
             self.json_response(502, {"error": str(exc)})
         except (ValueError, TypeError, AttributeError, UnicodeError) as exc:

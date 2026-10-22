@@ -1,9 +1,10 @@
 # Windprofiel
 
-Lokale webapp die per dag het geschatte vermogen toont van **Windpark Fryslân**,
-**Wynpark Beabuorren** en beide samen, berekend uit KNMI-windmetingen. Kies een
-dag van 1 november 2021 (Windpark Fryslân volledig in bedrijf) tot en met
-vandaag. Het is een indicatief model, geen gemeten productie.
+Lokale webapp die per dag de wind op ashoogte en de gemodelleerde mogelijke opbrengst
+toont van **Windpark Fryslân**, **Wynpark Beabuorren** en beide samen, berekend uit
+KNMI-windmetingen. Kies een dag van 1 november 2021 (Windpark Fryslân volledig in bedrijf)
+tot en met vandaag. Het is een indicatief model, geen gemeten productie; voor 2022–2025
+staat de gemeten dagproductie van Windpark Fryslân er apart naast.
 
 ## Snel bekijken
 
@@ -35,14 +36,20 @@ Vereist Python 3.12 of nieuwer; er zijn geen externe pakketten nodig.
 - **Vandaag** toont de metingen tot nu (KNMI loopt ongeveer een kwartier achter);
   de opbrengst geldt dan tot het laatste meetmoment. **Profiel ophalen** haalt
   nieuwe metingen op.
-- **Geschatte productie** bovenaan toont per park en samen de opbrengst,
+- **Gemodelleerde mogelijke opbrengst** bovenaan toont per park en samen de opbrengst,
   vollasturen, gemiddeld vermogen, piek en benutting (gemiddeld vermogen gedeeld
-  door het nominale vermogen), voor de hele dag of voor de gekozen selectie.
-- Per park staan dagopbrengst en vollasturen. **Sleep** in een vermogensgrafiek
-  om een tijdvak te selecteren; klik zonder slepen of op **Wis selectie** om terug te gaan.
-- **Hoogte-exponent α**: vul per park een eigen α in (0 tot 0,6, komma of punt)
-  om te zien wat dat met wind en vermogen doet; leeg laten of **Standaard** geeft
-  de geijkte waarde, die grijs in het veld staat. Ook via de API: `alpha_fryslan=0.25`.
+  door het nominale vermogen), voor de hele dag of voor de gekozen selectie. Het model
+  rekent met 100 % beschikbaarheid, zonder afregeling of stilstand.
+- Daaronder staan apart de **gemeten dagproductie** van Windpark Fryslân (2022–2025) met het
+  verschil tussen model en gemeten productie, en het deel dat **naar de waterstofsimulatie**
+  gaat (10 % van Fryslân plus Beabuorren).
+- Per park staan dagopbrengst, vollasturen en de wind op ashoogte. **Sleep** in een
+  vermogensgrafiek om een tijdvak te selecteren; klik zonder slepen of op **Wis selectie**
+  om terug te gaan.
+- **Hoogtevertaling**: leeg laten of **Standaard** geeft de factor per maand uit WINS50; de
+  gelijkwaardige α staat grijs in het veld. Een eigen α (0 tot 0,6, komma of punt) laat zien
+  wat een andere aanname met wind en vermogen doet. Ook via de API: `alpha_fryslan=0.25`. De oude,
+  op productie afgestelde methode is via de API op te vragen met `windmethode=productie_houtribdijk`.
 - Onder **Meetstations en vermogenscurves** kies je een ander KNMI-station of
   upload je een eigen curve (zie [Curve-formaat](#curve-formaat)).
 - **Download CSV** geeft de minuutreeksen in Nederlandse notatie voor Excel:
@@ -55,29 +62,37 @@ Vereist Python 3.12 of nieuwer; er zijn geen externe pakketten nodig.
 | | Windpark Fryslân | Wynpark Beabuorren |
 | --- | --- | --- |
 | Turbines | 89 × 4,3 MW (382,7 MW) | 8 × 1,3 MW (10,4 MW) |
-| KNMI-station | Houtribdijk | Stavoren |
-| Ashoogte | 115 m | 60 m |
-| Hoogte-exponent α | 0,18 (winter) tot 0,05 (zomer), geijkt op productie | 0,20 (aanname) |
+| KNMI-wind | gemiddelde van Houtribdijk en Stavoren | gemiddelde van Houtribdijk en Stavoren |
+| Ashoogte | 115 m boven water | 60 m |
+| Hoogtevertaling | factor per maand uit WINS50 (HARMONIE) op de parklocatie | idem, op 60 m |
 | Vermogenscurve | kubisch scenario: 3 / 11,5 / 25 m/s | secundaire gepubliceerde curve |
 | Zogverlies | 5 % minder wind | 2 % minder wind |
+| Beschikbaarheid | 100 % (mogelijke opbrengst) | 100 % |
 
-Wind op ashoogte: `v_h = v_10 × (h / 10)^α`. De tienminutengemiddelden van KNMI
-worden lineair naar minuten geïnterpoleerd; meetgaten blijven leeg. Zogverlies
-staat standaard aan en is uit te zetten met het vinkje (of `wake=0` in de API).
+Wind op ashoogte: `v_h = F_maand × v_10`, met `v_10` het gemiddelde van beide stations
+(alleen als beide meten) en `F` uit de KNMI-heranalyse WINS50, 2019–2021. Er zijn geen
+productiegegevens gebruikt voor station, hoogtevertaling of ashoogte. De dagopbrengst is de
+som van de tienminutenwaarden; de minuutlijn in de grafiek is lineair geïnterpoleerd en
+meetgaten blijven leeg. Zogverlies staat standaard aan en is uit te zetten met het vinkje
+(of `wake=0` in de API).
 
 Meer uitleg:
 
-- [Formules en ijking](docs/rekenmodel.md): rekenwijze, aannames en de vergelijking met productiedata.
-- [Databronnen](docs/databronnen.md): KNMI-dataset, stations, parkgegevens en hun bronnen.
+- [Formules](docs/rekenmodel.md): rekenwijze, aannames en de oude ijking.
+- [Databronnen](docs/databronnen.md): KNMI, WINS50, HARMONIE, stations, ashoogte, parkgegevens en hun bronnen.
+- [Afhankelijkheden](docs/afhankelijkheden.md): wat vroeger op productie was afgesteld, en de oude methode.
+- [Vergelijking](docs/vergelijking.md): model tegen gemeten dagproductie 2022–2025, oud en nieuw, gevoeligheid en gevolgen voor waterstof.
 
 ## Elektrolyser opsplitsen
 
 Open <http://127.0.0.1:8000/opsplitsing> (of de link bovenaan de startpagina). De
 pagina rekent door of een elektrolyser van 44 MW beter in één module of in 2 tot 16
 gelijke modules kan, op vier volledige windjaren (2022–2025). De voeding is dezelfde
-als op mijnwindpark.nl: 10 % van Windpark Fryslân plus heel Wynpark Beabuorren. Windpark
-Fryslân krijgt hier per tien minuten de hoogste KNMI-wind van Houtribdijk en Stavoren; die
-lijn past beter bij wat het park zelf levert dan één station. Beabuorren houdt Stavoren.
+als op mijnwindpark.nl: 10 % van de gemodelleerde mogelijke opbrengst van Windpark Fryslân
+plus die van heel Wynpark Beabuorren. Wind en hoogtevertaling zijn dezelfde als in het
+dagprofiel (`windprofiel/windbron.py`). Tot oktober 2026 kreeg Fryslân hier per tien minuten
+de hoogste wind van Houtribdijk en Stavoren met een op productie afgestelde α; dat is te herhalen
+met `--windmethode productie_hoogste`.
 
 - **Zo werkt de analyse** laat in zes stappen zien hoe de berekening loopt, met een
   schets van de startdrempels, de rendementscurve per module en een uitleg waarom een
@@ -197,25 +212,36 @@ is geen certificering van de bron.
 | --- | --- |
 | `windprofiel/knmi.py` | KNMI EDR-client met cache |
 | `windprofiel/profile.py` | dagminuten, curves en kubisch model |
+| `windprofiel/windbron.py` | stations en hoogtevertaling, gedeeld door dagprofiel en opsplitsing; ook de oude methoden |
+| `windprofiel/wins50.py` | haalt WINS50-wind op 10–120 m op bij park en stations (2019–2021) |
+| `windprofiel/ashoogte.py` | leidt stationskeuze en hoogtevertaling af uit WINS50, zonder productie |
 | `windprofiel/application.py` | parkgegevens, profielberekening en CSV |
 | `windprofiel/server.py` | lokale webserver en API |
 | `windprofiel/opsplitsing.py` | simulatie elektrolyser in N modules, met cache |
-| `windprofiel/ijking.py` | toetst de hoogte-exponent van Fryslân op opgeslagen productiedata |
+| `windprofiel/productie.py` | leest de gemeten dagproductie, alleen voor vergelijking en weergave |
+| `windprofiel/vergelijking.py` | model tegen gemeten dagproductie, oud en nieuw, met gevoeligheid |
+| `windprofiel/ijking.py` | de oude ijking van α op productiedata, om die te kunnen herhalen |
 | `windprofiel/preview.py` | maakt de zelfstandige `index.html` |
 | `windprofiel/static/` | pagina's, JavaScript, CSS en lettertype (TASA Orbiter, SIL OFL) |
-| `windprofiel/data/` | curve van Beabuorren, dagproductie Windpark Fryslân 2022–2025 |
+| `windprofiel/data/` | curve van Beabuorren, dagproductie Windpark Fryslân 2022–2025, WINS50-punten en hoogtevertaling |
 | `tests/` | unit-tests zonder netwerk |
 | `docs/` | rekenmodel en databronnen |
 
-Lokale bestanden onder `.cache/` (KNMI-antwoorden, geüploade curves, windaanbod en
-uitkomsten van de opsplitsing) en `.env`
-gaan niet mee in Git. Dagen van de laatste 24 uur worden niet gecachet, zodat
+Lokale bestanden onder `.cache/` (KNMI- en WINS50-antwoorden, geüploade curves, windaanbod en
+uitkomsten van de opsplitsing), `uitvoer/` en `.env` gaan niet mee in Git. Het windaanbod en de
+uitkomsten in de cache dragen de windmethode en `MODEL_VERSION` in hun sleutel; na deze wijziging
+(versie 11) worden ze dus opnieuw berekend. Opgeslagen scenario's van vóór versie 11 staan op de
+pagina en in `--lijst` als verouderd; opnieuw draaien met dezelfde naam werkt ze bij. Dagen van de laatste 24 uur worden niet gecachet, zodat
 ze nieuwe metingen krijgen.
 
 ## Controle en onderhoud
 
 ```sh
 python3 -m unittest discover -s tests -v   # unit-tests, zonder netwerk of sleutel
+python3 -m windprofiel.vergelijking        # model tegen gemeten dagproductie, schrijft uitvoer/vergelijking/
+python3 -m windprofiel.vergelijking --waterstof   # ook de opsplitsing met oude en nieuwe wind (enkele minuten)
+python3 -m windprofiel.wins50              # WINS50 opnieuw ophalen (1.096 aanvragen, let op het KNMI-quotum)
+python3 -m windprofiel.ashoogte            # stationsvergelijking en hoogtevertaling opnieuw afleiden
 node --test tests/opsplitsing-presentation.test.mjs  # presentatie en exports (Node.js 18+)
 python3 -m windprofiel.knmi                # controleert echte KNMI-toegang
 node --check windprofiel/static/app.js     # JavaScript-syntax
