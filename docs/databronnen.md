@@ -146,7 +146,40 @@ alleen als beide meten. De regel is vooraf gesteld: stations op het IJsselmeer z
 wateroppervlak als Windpark Fryslân. De vergelijking met WINS50 (2019–2021, uurwaarden,
 kruisvalidatie per jaar, maandfactor) ondersteunt die keuze:
 
-<!-- STATIONSTABEL -->
+**Windpark Fryslân, 115 m** (fout: RMS van de uurwind op ashoogte gedeeld door het gemiddelde, kruisvalidatie per jaar; energie: modelvermogen uit F × ff tegenover dat uit de WINS50-wind zelf)
+
+| Bron | ff gemiddeld | Correlatie | Fout | Energie |
+| --- | ---: | ---: | ---: | ---: |
+| Houtribdijk | 7,23 m/s | 0,833 | 26,2 % | −2,8 % |
+| Stavoren | 5,63 m/s | 0,850 | 26,2 % | −5,6 % |
+| Vlieland | 7,63 m/s | 0,857 | 25,9 % | −3,7 % |
+| Texelhors | 7,26 m/s | 0,848 | 27,4 % | −4,4 % |
+| Hoorn Terschelling | 6,25 m/s | 0,847 | 27,4 % | −4,3 % |
+| De Kooy | 5,38 m/s | 0,822 | 31,9 % | −8,3 % |
+| Leeuwarden | 4,70 m/s | 0,802 | 32,2 % | −7,5 % |
+| **Houtribdijk + Stavoren** (gekozen) | 6,43 m/s | 0,873 | 22,5 % | −3,7 % |
+| Houtribdijk + Vlieland | 7,43 m/s | 0,890 | 21,3 % | −3,4 % |
+| Houtribdijk + Stavoren + Vlieland | 6,83 m/s | 0,898 | 20,4 % | −3,8 % |
+
+Voor de gekozen bron geeft één factor voor het hele jaar een fout van 23,9 %, een factor per maand 22,5 % en per maand en dagdeel 22,3 %. De maandfactor is gehouden: het seizoenspatroon is duidelijk, een dagdeel voegt weinig toe.
+
+**Wynpark Beabuorren, 60 m** (fout: RMS van de uurwind op ashoogte gedeeld door het gemiddelde, kruisvalidatie per jaar; energie: modelvermogen uit F × ff tegenover dat uit de WINS50-wind zelf)
+
+| Bron | ff gemiddeld | Correlatie | Fout | Energie |
+| --- | ---: | ---: | ---: | ---: |
+| Houtribdijk | 7,23 m/s | 0,843 | 25,3 % | +2,3 % |
+| Stavoren | 5,63 m/s | 0,868 | 24,6 % | +2,7 % |
+| Vlieland | 7,63 m/s | 0,870 | 24,5 % | +3,0 % |
+| Texelhors | 7,26 m/s | 0,866 | 25,4 % | +4,5 % |
+| Hoorn Terschelling | 6,25 m/s | 0,860 | 26,3 % | +3,9 % |
+| De Kooy | 5,38 m/s | 0,843 | 30,2 % | +3,9 % |
+| Leeuwarden | 4,70 m/s | 0,844 | 28,9 % | +3,8 % |
+| **Houtribdijk + Stavoren** (gekozen) | 6,43 m/s | 0,887 | 21,1 % | +1,2 % |
+| Houtribdijk + Vlieland | 7,43 m/s | 0,902 | 19,9 % | +0,7 % |
+| Houtribdijk + Stavoren + Vlieland | 6,83 m/s | 0,912 | 18,8 % | +0,6 % |
+
+Voor de gekozen bron geeft één factor voor het hele jaar een fout van 22,0 %, een factor per maand 21,1 % en per maand en dagdeel 21,1 %. De maandfactor is gehouden: het seizoenspatroon is duidelijk, een dagdeel voegt weinig toe.
+
 
 | Station | Coördinaten | Hoogte (EDR) | Afstand tot Fryslân | Ligging |
 | --- | --- | ---: | ---: | --- |
@@ -211,4 +244,14 @@ er niet van af; `tests/test_productie_onafhankelijk.py` controleert dat.
 `python3 -m unittest discover -s tests -v` draait de unit-tests met nagebootste
 KNMI-antwoorden en synthetische testcurves, zonder netwerk.
 
-<!-- DAGPROFIELEN -->
+Echte EDR-dagprofielen in de zelfstandige `index.html`, standaardmethode met zogverlies. Modeluitkomsten,
+naast de gemeten dagproductie van Windpark Fryslân:
+
+| Datum | Tienminutenwaarden | Ontbrekend | Fryslân (model) | Beabuorren (model) | Samen (model) | Fryslân gemeten | Verschil Fryslân (model − gemeten) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 15-01-2025 | 144 | 0 | 233,7 MWh | 1,7 MWh | 235,5 MWh | 436 MWh | −202,3 MWh |
+| 30-03-2025 | 138 | 0 | 8.802,1 MWh | 225,0 MWh | 9.027,1 MWh | 4.586 MWh | +4.216,1 MWh |
+| 26-10-2025 | 150 | 0 | 9.567,5 MWh | 236,6 MWh | 9.804,1 MWh | 8.890 MWh | +677,5 MWh |
+
+Op 30 maart en 26 oktober 2025 rekent het model de hele dag met vol vermogen van Fryslân (382,7 MW × 23
+of 25 uur). Met de oude methode was dat 271,0 / 8.802,1 / 9.440,3 MWh voor Fryslân.

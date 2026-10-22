@@ -24,7 +24,7 @@
   "data_sha256": {
     "windprofiel/data/beabuorren.json": "ef066eb7f6abe2efe750bff97f22dbee0c20c8c44fac5f40ff215b8bf10c2fbb",
     "windprofiel/data/productie_fryslan.csv": "2fc5f36744512cccfe7293e5c062bca7d07fbc42f1d8b9d6a6e902b771c7417d",
-    "windprofiel/data/ashoogte.json": "91c4d562459bc8f50bf6d7b82e1439a8ba1e98351810906c7e4561efb3273922"
+    "windprofiel/data/ashoogte.json": "d15675e1e01778976b962681d5bda20815fe50dfac92bab7e03a21203e32de87"
   },
   "wind_method": "onafhankelijk"
 }

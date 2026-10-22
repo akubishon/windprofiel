@@ -128,17 +128,20 @@ met `--windmethode productie_hoogste`.
   kosten per module. Met de standaardwaarden wint bijna altijd 2: bij 10–20 % minimumlast
   vangt één grote module de zwakke wind al grotendeels, en 1 M€ per extra unit is veel.
   Met een hoge minimumlast staat één module van 44 MW onder ~18 MW stil, terwijl een
-  module van 11 MW al vanaf ~4,5 MW draait. Windjaar 2025, `verdelen`:
+  module van 11 MW al vanaf ~4,5 MW draait. Windjaar 2025, `verdelen`, met de productie-onafhankelijke
+  wind (tussen haakjes de oude, op productie afgestelde wind):
 
   | Scenario | Goedkoopst | LCOH 1 module → goedkoopst |
   |---|---|---|
-  | PEM standaard | 2 modules | 8,11 → 8,07 €/kg |
-  | Alkaline standaard (20 %) | 2 modules | 8,01 → 7,95 €/kg |
-  | Alkaline, 40 % minimumlast | 3 modules | 8,39 → 8,07 €/kg |
-  | Alkaline, 40 %, 0,3 M€ per module | **4 modules** | 8,65 → 8,21 €/kg |
+  | PEM standaard | 2 modules (2) | 8,42 → 8,34 €/kg (8,11 → 8,07) |
+  | Alkaline standaard (20 %) | 2 modules (2) | 8,35 → 8,26 €/kg (8,01 → 7,95) |
+  | Alkaline, 40 % minimumlast | 3 modules (3) | 8,86 → 8,41 €/kg (8,39 → 8,07) |
+  | Alkaline, 40 %, 0,3 M€ per module | **4 modules** (4) | 9,18 → 8,57 €/kg (8,65 → 8,21) |
 
-  In het laatste scenario wordt met 4 modules 6255 uur per jaar waterstof gemaakt, tegen
-  3468 uur met 1 module.
+  In het laatste scenario wordt met 4 modules 5706 uur per jaar waterstof gemaakt, tegen
+  2857 uur met 1 module (oud: 6255 en 3468 uur). Minder wind maakt elke configuratie duurder per
+  kilo, maar verandert het goedkoopste aantal modules in deze scenario's niet; zie
+  [vergelijking.md](docs/vergelijking.md#gevolgen-voor-de-waterstofuitkomsten).
 - **Een dag van dichtbij** vergelijkt het verbruik van 1 module en N modules per tien minuten.
   Kies een moment in de grafiek of met de tijdschuif en vorige/volgende. De productie van beide
   configuraties staat bij de grafiek. Daarnaast tonen zes compacte rekenstappen hun kernwaarden;

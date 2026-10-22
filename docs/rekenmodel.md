@@ -29,7 +29,18 @@ tussen de stations en de parklocatie (ligging, dijkhoogte van Houtribdijk, de la
 Stavoren). Daarom is F groter dan de toename met de hoogte alleen. Om te vergelijken met de oude
 werkwijze staat F ook als exponent vanaf 10 m: `α = ln F / ln(h/10)`.
 
-<!-- FACTORTABEL -->
+WINS50 2019–2021, 26.304 uren:
+
+| Maand | jan | feb | mrt | apr | mei | jun | jul | aug | sep | okt | nov | dec |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| F Fryslân (115 m) | 1,551 | 1,537 | 1,404 | 1,354 | 1,250 | 1,276 | 1,250 | 1,323 | 1,438 | 1,511 | 1,540 | 1,611 |
+| als α vanaf 10 m | 0,180 | 0,176 | 0,139 | 0,124 | 0,091 | 0,100 | 0,091 | 0,115 | 0,149 | 0,169 | 0,177 | 0,195 |
+| F per WINS50-jaar, laagste–hoogste | 1,53–1,59 | 1,45–1,63 | 1,38–1,42 | 1,29–1,39 | 1,23–1,28 | 1,27–1,29 | 1,22–1,30 | 1,29–1,37 | 1,36–1,52 | 1,46–1,57 | 1,49–1,58 | 1,57–1,63 |
+| Alleen hoogtetoename boven het park (WINS50 v₁₁₅/v₁₀) | 1,303 | 1,364 | 1,257 | 1,227 | 1,144 | 1,165 | 1,116 | 1,153 | 1,197 | 1,221 | 1,240 | 1,318 |
+| F Beabuorren (60 m) | 1,178 | 1,154 | 1,088 | 1,048 | 1,002 | 0,996 | 1,010 | 1,038 | 1,120 | 1,136 | 1,169 | 1,196 |
+| als α vanaf 10 m | 0,091 | 0,080 | 0,047 | 0,026 | 0,001 | −0,002 | 0,005 | 0,021 | 0,063 | 0,071 | 0,087 | 0,100 |
+
+In de zomer neemt de wind boven het IJsselmeer in WINS50 minder toe met de hoogte dan in de winter. Dat seizoenspatroon lijkt op de oude, op productie afgestelde seizoens-α, maar komt hier uit het model, niet uit productie. De oude α werd op Houtribdijk alleen toegepast; dat station meet meer wind dan het gemiddelde van Houtribdijk en Stavoren, dus dezelfde α gaf toen een hogere wind op ashoogte.
 
 **Status.** Geen productiegegeven is gebruikt voor de stationskeuze, de factor of de ashoogte.
 WINS50 is een model, geen meting op ashoogte; er is geen onafhankelijke windmeting op 115 m bij
