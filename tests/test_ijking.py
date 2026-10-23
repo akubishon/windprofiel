@@ -1,8 +1,8 @@
 import unittest
 from datetime import date
 
-from windprofiel.ijking import CURRENT, load_production, model
-from windprofiel.application import PARKS
+from windprofiel import windbron
+from windprofiel.ijking import CURRENT, METHOD, load_production, model
 
 
 class IjkingTests(unittest.TestCase):
@@ -14,8 +14,12 @@ class IjkingTests(unittest.TestCase):
         self.assertAlmostEqual(production[date(2022, 1, 1)], 7.608)
         self.assertTrue(all(0 <= v <= 382.7 * 24 / 1000 for v in production.values()))   # nooit boven vollast
 
-    def test_current_formula_matches_park_settings(self):
-        self.assertEqual(CURRENT, (PARKS["fryslan"]["alpha"], PARKS["fryslan"]["alpha_seasonal"]))
+    def test_old_calibration_reproduces_the_old_opsplitsing_method(self):
+        # De oude ijking blijft herhaalbaar; de standaardmethode gebruikt haar uitkomst niet.
+        old = windbron.METHODS[METHOD]["fryslan"]
+        self.assertEqual(CURRENT, (0.115, 0.065))
+        self.assertEqual((old.alpha, old.alpha_seasonal, old.rule), (0.115, 0.065, "hoogste"))
+        self.assertNotEqual(windbron.METHODS[windbron.DEFAULT]["fryslan"].height, "alpha")
 
     def test_model_interpolates_between_alpha_steps(self):
         row = (date(2024, 1, 1), 1.0, 0.0, [float(i) for i in range(91)])

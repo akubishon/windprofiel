@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 
 from windprofiel.application import load_curve
 
-from windprofiel.opsplitsing import (AANNAMES_META, TECHNOLOGIES, Aannames, break_even, combine_wind, desired_count, draw_mw, economics,
+from windprofiel import windbron
+from windprofiel.opsplitsing import (AANNAMES_META, TECHNOLOGIES, Aannames, break_even, desired_count, draw_mw, economics,
                                      capex_eur, park_mw, parse_aannames, per_kw_eur, power_price, sequential_loads, simulate,
                                      simulate_with_replacements, variants,
                                      stack_kg_h, summarise, wind_steps)
@@ -127,17 +128,15 @@ class OpsplitsingTests(unittest.TestCase):
 
     def test_wind_steps_match_supply_model(self):
         stamp = 1720000000
-        for park_id in ("fryslan", "beabuorren"):
-            curve = load_curve(park_id)
-            step = wind_steps(park_id, 7.5, stamp, curve)
-            self.assertAlmostEqual(step["mw"], park_mw(park_id, 7.5, datetime.fromtimestamp(stamp, timezone.utc), curve), places=3)
-            self.assertAlmostEqual(step["v_as"], 7.5 * (step["ashoogte"] / 10) ** step["alpha"], places=2)
-
-    def test_combined_wind_takes_the_highest_station_and_fills_gaps(self):
-        moments, speeds, sources = combine_wind({"houtribdijk": {1: 6.0, 2: 3.0, 3: None}, "stavoren": {1: 4.0, 2: 5.0, 4: 2.0}})
-        self.assertEqual(moments, [1, 2, 4])
-        self.assertEqual(speeds, [6.0, 5.0, 2.0])
-        self.assertEqual(sources, ["houtribdijk", "stavoren", "stavoren"])
+        for method in windbron.METHODS:
+            for park_id in ("fryslan", "beabuorren"):
+                pm = windbron.METHODS[method][park_id]
+                curve = load_curve(park_id)
+                step = wind_steps(park_id, 7.5, stamp, curve, pm)
+                moment = datetime.fromtimestamp(stamp, timezone.utc)
+                self.assertAlmostEqual(step["mw"], park_mw(park_id, 7.5, moment, curve, pm), places=3)
+                self.assertAlmostEqual(step["v_as"], 7.5 * step["factor"], places=2)
+                self.assertAlmostEqual(step["factor"], (step["ashoogte"] / 10) ** step["alpha"], places=3)
 
     def test_sequential_loads_lose_nothing_the_modules_can_absorb(self):
         a = replace(TECHNOLOGIES["alkaline"][1], capaciteit_mw=25)
@@ -203,7 +202,7 @@ class OpsplitsingTests(unittest.TestCase):
         from unittest import mock
         from windprofiel import opsplitsing
         flat = supply([3.0] * 300 + [30.0] * 300)
-        with tempfile.TemporaryDirectory() as folder, mock.patch.object(opsplitsing, "supply_year", lambda year: flat), \
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(opsplitsing, "supply_year", lambda year, method=None: flat), \
                 mock.patch.object(opsplitsing, "CACHE", Path(folder)):
             data = opsplitsing.omslagkaart(STILL, [2024], [1, 2, 4], "verdelen", workers=2)
             self.assertEqual(opsplitsing.omslagkaart(STILL, [2024], [1, 2, 4], "verdelen"), data)   # uit de cache

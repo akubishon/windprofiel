@@ -1,43 +1,45 @@
-"""Toets de hoogte-exponent voor Windpark Fryslân op de opgeslagen dagproductie.
+"""De oude ijking van de hoogte-exponent voor Windpark Fryslân op de opgeslagen dagproductie.
 
-Afregelen en stilstand verlagen de productie alleen. Dagen die onder een grens
-maal het model blijven (en minstens 0,5 GWh lager) gelden daarom als verdacht en
-tellen niet mee; daarna wordt opnieuw gefit tot de selectie stabiel is. Zie
-docs/rekenmodel.md, sectie 7, voor de uitkomst en de beperkingen.
+Alleen om de oude, op productie afgestelde methode te kunnen herhalen; de standaard
+rekenwijze gebruikt deze uitkomst niet meer (zie docs/afhankelijkheden.md).
 
-De dagproductie staat in data/productie_fryslan.csv, zodat deze toets zonder
-nieuwe aanvragen bij de app van Windpark Fryslân opnieuw kan draaien. De wind
-komt uit de jaarcache van de opsplitsing (één KNMI-aanvraag per station per jaar).
+Selectieregel van de oude ijking: dagen waarop de gemeten productie onder een grens maal
+het model bleef (en minstens 0,5 GWh lager) tellen niet mee; daarna wordt opnieuw gefit tot
+de selectie stabiel is. Dagen waarop het model lager is dan gemeten, blijven altijd staan.
+Die dagen heten hier ‘dagen met groot verschil (model hoger)’; de oorzaak van het verschil
+is uit dagtotalen niet vast te stellen.
+
+De wind komt uit de jaarcache van de opsplitsing met de oude windmethode `productie_hoogste`.
 """
 
 import argparse
-import csv
 import math
 from datetime import date, datetime
 from pathlib import Path
 
+from . import productie, windbron
 from .application import PARKS, ROOT, load_curve, park_power_mw
 from .knmi import KNMIError, load_env_file
 from .opsplitsing import LOCAL, available_years, supply_year
 
-PRODUCTION = Path(__file__).parent / "data" / "productie_fryslan.csv"
+PRODUCTION = productie.PRODUCTION
+METHOD = "productie_hoogste"
 ALPHA_STEP = 0.005
 ALPHAS = [i * ALPHA_STEP for i in range(91)]   # 0 tot 0,45
-CURRENT = (0.115, 0.065)                       # application.PARKS["fryslan"]: alpha + alpha_seasonal
+OLD = windbron.METHODS[METHOD]["fryslan"]
+CURRENT = (OLD.alpha, OLD.alpha_seasonal)     # de oude seizoensformule: alpha + alpha_seasonal · cos
 
 
 def load_production(path: Path = PRODUCTION) -> dict[date, float]:
     """Dagproductie in GWh; lege waarden ontbreken, nul blijft nul."""
-    with path.open(encoding="utf-8") as file:
-        return {date.fromisoformat(row["datum"]): int(row["productie_kwh"]) / 1e6
-                for row in csv.DictReader(file) if row["productie_kwh"] not in ("", "None")}
+    return {day: mwh / 1000 for day, mwh in productie.load(path).items()}
 
 
 def wind_per_day(years: list[int]) -> dict[str, dict[date, list[float]]]:
     """KNMI-wind per dag: Houtribdijk alleen, en per tien minuten de hoogste van beide stations."""
     days = {"houtribdijk": {}, "hoogste": {}}
     for year in years:
-        supply = supply_year(year)
+        supply = supply_year(year, method=METHOD)
         for stamp, high, low in zip(supply["t"], supply["stations"]["houtribdijk"], supply["stations"]["stavoren"]):
             day = datetime.fromtimestamp(stamp, LOCAL).date()
             if high is not None:
@@ -99,7 +101,7 @@ def robust_fit(rows: list[tuple], limit: float | None) -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Toets α voor Windpark Fryslân op de opgeslagen dagproductie.")
+    parser = argparse.ArgumentParser(description="Herhaal de oude ijking van α voor Windpark Fryslân op de opgeslagen dagproductie.")
     parser.add_argument("--jaren", type=int, nargs="+", default=available_years())
     parser.add_argument("--grenzen", type=float, nargs="+", default=[0.65, 0.75, 0.85])
     args = parser.parse_args()
@@ -116,8 +118,8 @@ def main() -> int:
             r = robust_fit(rows, limit)
             name = f"{limit:.0%}" if limit else "geen"
             print(f"{option:12} grens {name:>4}: α = {r['a']:.3f} + {r['b']:.3f}·cos "
-                  f"(winter {r['a'] + r['b']:.3f}, zomer {r['a'] - r['b']:.3f}), behouden {r['behouden']}/{r['dagen']}, "
-                  f"RMS {r['rms_gwh']:.2f} GWh (huidige formule {r['rms_huidige_gwh']:.2f})")
+                  f"(winter {r['a'] + r['b']:.3f}, zomer {r['a'] - r['b']:.3f}), behouden {r['behouden']}/{r['dagen']} "
+                  f"(weggelaten: groot verschil, model hoger), RMS {r['rms_gwh']:.2f} GWh (oude formule {r['rms_huidige_gwh']:.2f})")
     return 0
 
 

@@ -389,8 +389,62 @@ a {
   font-size: 14px;
   font-weight: 600;
 }
+.dashboard-note {
+  margin: -4px 0 12px;
+  font-size: 13px;
+  color: #57746b;
+}
+/* Gemeten productie en aandeel voor waterstof: andere grootheden dan het model, apart getoond */
+.dashboard-extra {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 14px;
+}
+.extra {
+  background: #f6f4ee;
+  border: 1px solid #e2ddd0;
+  border-radius: 14px;
+  padding: 16px 20px;
+  min-width: 0;
+}
+.extra h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+.extra dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.extra dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.extra dt {
+  font-size: 13px;
+  color: #6b807b;
+}
+.extra dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+}
+.extra .note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #6b807b;
+}
+.series-title {
+  margin: 16px 0 4px;
+  font-size: 14px;
+  color: #57746b;
+}
 @media(max-width:800px) {
-  .tiles {
+  .tiles,
+  .dashboard-extra {
     grid-template-columns: 1fr;
   }
 }

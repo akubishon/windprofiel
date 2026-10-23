@@ -3,7 +3,9 @@ import unittest
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
-from windprofiel.application import PARKS, build_profile, csv_rows, day_energy, nl_number, nl_time, parse_alpha, shear_exponent, interpolate_minutes, parse_wind, park_power_mw, validate_curve
+from windprofiel import windbron
+from windprofiel.application import (PARKS, build_profile, csv_rows, day_energy, day_intervals, nl_number, nl_time, parse_alpha,
+                                     interpolate_minutes, parse_wind, park_power_mw, validate_curve)
 from windprofiel.knmi import KNMIError
 
 
@@ -15,6 +17,23 @@ def payload(values):
         "ranges": {"ff": {"axisNames": ["t", "y", "x"], "shape": [3, 1, 1], "values": values}},
     }], "parameters": {"ff": {"unit": {"symbol": {"value": "m/s"}},
                                 "measurementType": {"method": "mean", "duration": "-PT10M"}}}}
+
+
+STATION_IDS = [sid for _, sid in windbron.STATIONS.values()]
+
+
+class Client:
+    """Nagebootste KNMI-client: drie tienminutenwaarden per station, rond middernacht."""
+    def __init__(self, values):
+        self.values = values
+
+    def locations(self):
+        return {"features": [{"id": sid, "properties": {"name": sid}} for sid in STATION_IDS]}
+
+    def observations(self, station, day):
+        data = payload(self.values.get(station, [5, 5, 5]))
+        data["coverages"][0]["eumetnet:locationId"] = station
+        return data
 
 
 class ApplicationTests(unittest.TestCase):
@@ -40,15 +59,10 @@ class ApplicationTests(unittest.TestCase):
         self.assertEqual(park_power_mw(24.9, "beabuorren", curve, wake=True), 10.4)
 
     def test_combined_profile_reference_times_and_missing_wind(self):
-        class Client:
-            def locations(self):
-                return {"features": [{"id": p["station"], "properties": {"name": k}} for k,p in PARKS.items()]}
-            def observations(self, station, day):
-                data = payload([8, None, 8] if station == PARKS["fryslan"]["station"] else [8, 8, 8])
-                data["coverages"][0]["eumetnet:locationId"] = station
-                return data
+        # Eén station mist een meting: het gemiddelde ontbreekt dan, er wordt niets ingevuld.
+        client = Client({windbron.station_id("houtribdijk"): [8, None, 8], windbron.station_id("stavoren"): [8, 8, 8]})
         with patch("windprofiel.application.load_curve", return_value=None):
-            profile = build_profile(date(2025,1,1), client=Client())
+            profile = build_profile(date(2025,1,1), client=client)
         self.assertEqual(profile["parks"]["fryslan"]["curve"]["kind"], "cubic_scenario")
         self.assertIsNone(profile["parks"]["fryslan"]["energy_mwh"])
         self.assertIsNone(profile["combined_energy_mwh"])
@@ -57,48 +71,64 @@ class ApplicationTests(unittest.TestCase):
         self.assertIsNone(points[1]["power_mw"])
         self.assertTrue(all(p["power_mw"] is None for p in profile["combined_reference_points"]))
 
-    def test_seasonal_shear_exponent(self):
-        fryslan, beabuorren = PARKS["fryslan"], PARKS["beabuorren"]
-        self.assertAlmostEqual(shear_exponent(fryslan, date(2025, 1, 1)), 0.18)
-        self.assertAlmostEqual(shear_exponent(fryslan, date(2025, 7, 2)), 0.05, places=3)
-        self.assertEqual(shear_exponent(beabuorren, date(2025, 7, 2)), 0.20)
-
     def test_profile_wake_switch(self):
-        class Client:
-            def locations(self):
-                return {"features": [{"id": p["station"], "properties": {"name": k}} for k,p in PARKS.items()]}
-            def observations(self, station, day):
-                data = payload([5, 5, 5])
-                data["coverages"][0]["eumetnet:locationId"] = station
-                return data
         with patch("windprofiel.application.load_curve", return_value=None):
-            on = build_profile(date(2025,1,1), client=Client())
-            off = build_profile(date(2025,1,1), client=Client(), wake=False)
+            on = build_profile(date(2025,1,1), client=Client({}))
+            off = build_profile(date(2025,1,1), client=Client({}), wake=False)
         self.assertTrue(on["wake"]); self.assertFalse(off["wake"])
         index = on["parks"]["fryslan"]["wind_ms"].index(5)
         self.assertLess(on["parks"]["fryslan"]["power_mw"][index], off["parks"]["fryslan"]["power_mw"][index])
         self.assertIn("Zogverlies uitgeschakeld", off["method"])
 
     def test_custom_alpha(self):
-        class Client:
-            def locations(self):
-                return {"features": [{"id": p["station"], "properties": {"name": k}} for k,p in PARKS.items()]}
-            def observations(self, station, day):
-                data = payload([5, 5, 5])
-                data["coverages"][0]["eumetnet:locationId"] = station
-                return data
         with patch("windprofiel.application.load_curve", return_value=None):
-            standard = build_profile(date(2025,1,1), client=Client())
-            custom = build_profile(date(2025,1,1), client=Client(), alphas={"fryslan": 0.3, "beabuorren": None})
+            standard = build_profile(date(2025,1,1), client=Client({}))
+            custom = build_profile(date(2025,1,1), client=Client({}), alphas={"fryslan": 0.3, "beabuorren": None})
         f, s = custom["parks"]["fryslan"], standard["parks"]["fryslan"]
         self.assertEqual((f["alpha"], f["alpha_custom"]), (0.3, True))
-        self.assertAlmostEqual(f["alpha_default"], 0.18)
+        january = windbron.table()["parken"]["fryslan"]["factor"][0]
+        self.assertAlmostEqual(f["factor_default"], january)
+        self.assertAlmostEqual(f["alpha_default"], windbron.alpha_equivalent("fryslan", january))
         index = f["wind_ms"].index(5)
         self.assertAlmostEqual(f["hub_wind_ms"][index], 5 * 11.5 ** 0.3)
+        self.assertAlmostEqual(s["hub_wind_ms"][index], 5 * january)
         self.assertGreater(f["power_mw"][index], s["power_mw"][index])
         self.assertFalse(custom["parks"]["beabuorren"]["alpha_custom"])
-        self.assertEqual(custom["parks"]["beabuorren"]["alpha"], 0.20)
+        self.assertAlmostEqual(custom["parks"]["beabuorren"]["factor"], windbron.table()["parken"]["beabuorren"]["factor"][0])
         self.assertIn("Eigen hoogte-exponent voor Windpark Fryslân", custom["method"])
+
+    def test_explicit_station_means_only_that_station(self):
+        houtribdijk = windbron.station_id("houtribdijk")
+        with patch("windprofiel.application.load_curve", return_value=None):
+            default = build_profile(date(2025,1,1), client=Client({}))
+            single = build_profile(date(2025,1,1), client=Client({}), stations={"fryslan": houtribdijk, "beabuorren": None})
+        self.assertEqual(len(default["parks"]["fryslan"]["stations"]), 2)
+        self.assertEqual(default["parks"]["fryslan"]["station_rule"], "gemiddelde")
+        f = single["parks"]["fryslan"]
+        self.assertEqual(([s["id"] for s in f["stations"]], f["station_rule"]), ([houtribdijk], "een"))
+        own = next(i for i in windbron.table()["parken"]["fryslan"]["bronvergelijking"] if i["naam"] == "Houtribdijk")
+        self.assertAlmostEqual(f["factor"], own["factor"][0])
+        self.assertEqual(single["parks"]["beabuorren"]["station_rule"], "gemiddelde")
+
+    def test_old_methods_stay_reproducible(self):
+        with patch("windprofiel.application.load_curve", return_value=None):
+            old = build_profile(date(2025,1,1), client=Client({}), method="productie_houtribdijk")
+        f = old["parks"]["fryslan"]
+        self.assertAlmostEqual(f["alpha"], 0.18)           # 0,115 + 0,065 · cos(0)
+        self.assertEqual([s["id"] for s in f["stations"]], [windbron.station_id("houtribdijk")])
+        self.assertAlmostEqual(old["parks"]["beabuorren"]["alpha"], 0.20)
+
+    def test_profile_separates_wind_model_measured_and_hydrogen_share(self):
+        with patch("windprofiel.application.load_curve", return_value=None):
+            profile = build_profile(date(2025,1,1), client=Client({}))
+        self.assertIn("hub_wind_ms", profile["parks"]["fryslan"])
+        self.assertEqual(profile["measured"]["energy_mwh"], 6803.0)   # gemeten dagtotaal 1 januari 2025
+        self.assertEqual(profile["measured"]["park"], "fryslan")
+        # Drie tienminutenwaarden rond middernacht: geen volledige dag, dus geen modeldagtotaal en geen verschil.
+        self.assertIsNone(profile["parks"]["fryslan"]["energy_mwh"])
+        self.assertIsNone(profile["measured"]["model_minus_measured_mwh"])
+        self.assertEqual(profile["hydrogen"]["share"], {"fryslan": 0.10, "beabuorren": 1.0})
+        self.assertIsNone(profile["hydrogen"]["total_mwh"])
 
     def test_parse_alpha(self):
         self.assertIsNone(parse_alpha(None))
@@ -149,6 +179,7 @@ class DayEnergyTests(unittest.TestCase):
     def test_running_day_counts_until_last_measurement(self):
         stamps = ["00:00", "00:01", "00:02", "00:03"]
         self.assertEqual(day_energy([60, 120, 60, 60], stamps, False), (5, None))
+        self.assertEqual(day_energy([6, 12, 6, 6], stamps, False, per_hour=6), (5, None))   # tienminutenwaarden
         self.assertEqual(day_energy([60, 120, None, None], stamps, True), (3, "00:01"))
         self.assertEqual(day_energy([60, 120, None, None], stamps, False), (None, None))
         self.assertEqual(day_energy([60, None, 60, None], stamps, True), (None, None))
@@ -166,4 +197,7 @@ class DutchCsvTests(unittest.TestCase):
         park = lambda v: {"wind_ms": [v], "hub_wind_ms": [v], "power_mw": [None]}
         profile = {"minutes": 1440, "timestamps": ["2026-01-08T00:00:00+01:00"], "combined_mw": [None],
                    "parks": {"fryslan": park(5.5), "beabuorren": park(4.0)}}
-        self.assertEqual(csv_rows(profile)[1], ["08-01-2026 00:00", "5,5", "4", "5,5", "4", "", "", ""])
+        rows = csv_rows(profile)
+        self.assertEqual(rows[1], ["08-01-2026 00:00", "5,5", "4", "5,5", "4", "", "", ""])
+        self.assertIn("fryslan_model_mogelijk_MW", rows[0])
+        self.assertIn("fryslan_wind_ashoogte_ms", rows[0])
