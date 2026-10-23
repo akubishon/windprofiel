@@ -60,42 +60,24 @@ tien minuten de hoogste van Houtribdijk en Stavoren met dezelfde `α`. Die `α` 
 waren afgesteld op gemeten productie (sectie 7). Ze blijven beschikbaar als windmethode
 `productie_houtribdijk` en `productie_hoogste`; zie [afhankelijkheden.md](afhankelijkheden.md).
 
-## 2. Benaderde curve voor Fryslân
+## 2. Gedigitaliseerde curve voor Fryslân
 
-Met `v = v_h` geldt per turbine:
+Standaard gebruikt het model 29 punten uit de fabrikantpresentatie
+*Siemens Gamesa Onshore* (2023), pdf-pagina 39, lijn **SWT-DD-130 @ 4.3; 107 dB**.
+Per turbine wordt lineair tussen `[m/s, kW]` geïnterpoleerd, zoals in sectie 3.
+Voorbeelden: 1.920 kW bij 8 m/s, 4.300 kW van 14 tot 23 m/s en 2.930 kW bij
+25 m/s. De afname bij hoge wind is behouden.
 
-```math
-P(v)=\begin{cases}
-0 & v<3\\
-4300\dfrac{v^3-3^3}{11{,}5^3-3^3} & 3\leq v<11{,}5\\
-4300 & 11{,}5\leq v\leq25\\
-0 & v>25
-\end{cases}
-\quad[\mathrm{kW}]
-```
-De aanloop is genormaliseerd: bij 3 m/s is de teller nul, bij 11,5 m/s is teller
-gelijk aan noemer en wordt 4.300 kW bereikt. Anders dan `(v−3)³` gebruikt dit
-model `v³−3³`. Er is geen bewijs dat deze eenvoudige curve nauwkeuriger is dan
-een andere benadering voor deze specifieke turbine; het is een transparante
-keuze die bij de afgesproken vereenvoudiging past.
+De grafiek eindigt bij 28 m/s op ongeveer 860 kW. **28,01 m/s is een technische
+bereikgrens van de implementatie, geen bevestigde fysieke cut-out**. Vanaf die
+waarde geeft het model nul. Referentieluchtdichtheid en de projectspecifieke
+bedrijfsinstelling voor Fryslân zijn onbekend; dit is geen gecertificeerde tabel.
+Zie [bron, omzetting en aannames](curves/README.md).
 
-De derde macht is geïnspireerd op:
-
-```math
-P_\mathrm{wind}=\frac12\rho A v^3,\qquad
-P_\mathrm{turbine}=C_p P_\mathrm{wind}
-```
-Hier is `ρ` de luchtdichtheid, `A` het rotoroppervlak en `Cₚ` de
-omzettingsefficiëntie, die in werkelijkheid met de wind en regeling verandert.
-De [U.S. Department of Energy Small Wind Guidebook](https://windexchange.energy.gov/small-wind-guidebook)
-beschrijft dit verband. Deze bron ondersteunt de kubische natuurkundige
-achtergrond, **niet de exacte genormaliseerde curve of gekozen snelheidgrenzen**.
-
-**3, 11,5 en 25 m/s zijn de in deze sessie afgesproken scenario-aannames.**
-Er is geen gecontroleerde fabrikantbron gevonden die deze waarden voor de
-4,3 MW-uitvoering bevestigt. Bij precies 25 m/s blijft dit scenario op vol
-vermogen; daarboven gaat het abrupt naar nul, overeenkomstig het voorgestelde
-raamwerk. Dit model bevat geen stormregeling of herstartvertraging.
+Een eigen geüploade curve blijft voorrang houden. De vorige kubische benadering
+met 3 / 11,5 / 25 m/s blijft als expliciete terugvalfunctie voor historische
+scenario's beschikbaar. Zij is niet meer de standaard. Historische ijkresultaten
+verderop in dit document zijn met die vorige curve berekend.
 
 ## 3. Gepubliceerde curve voor Beabuorren
 
@@ -110,7 +92,7 @@ vermogen halverwege die punten. De punten komen uit de grafiek voor
 Het is een secundaire bron, geen gecertificeerde fabrikantcurve; de
 referentieluchtdichtheid is onbekend. Vanaf 25 m/s wordt het vermogen in dit
 model nul, volgens de cut-out in deze datasheet. Dat grensgedrag verschilt dus
-bij precies 25 m/s van het gekozen Fryslân-scenario.
+bij precies 25 m/s van het voormalige kubische Fryslân-scenario.
 
 ## 4. Parken optellen en energie berekenen
 
@@ -277,7 +259,7 @@ niet vast te stellen waardoor de productie daar lager lag dan het model.
 | Hoogtevertaling | F per park en maand | WINS50 (HARMONIE-AROME), 2019–2021, sectie 1; aanname zonder meting op ashoogte |
 | Fryslân | 89 × 4,3 MW | [Exploitant](https://www.windparkfryslan.nl/onderwerpen/windturbines/) |
 | Fryslân-ashoogte | 115 m boven water | ‘Hoogte boven water 180 m’ ([exploitant](https://www.windparkfryslan.nl/onderwerpen/windturbines/)) − 130 m / 2; 109 m (persbericht 2018) als gevoeligheid ([databronnen](databronnen.md#ashoogte-en-verticale-referentie)) |
-| Fryslân-grenzen | 3 / 11,5 / 25 m/s | Afgesproken scenario-keuze; niet bevestigd door fabrikant |
+| Fryslân-curve | gedigitaliseerd, 4,3 MW / 107 dB; modelgrens 28,01 m/s | Fabrikantgrafiek; grens is technische aanname, geen fysieke cut-out |
 | Beabuorren | 8 turbines, 10,4 MW | [Onderhoudsbedrijf Rengineers](https://rengineers.eu/nieuw/wynpark-beaborren-25-jaar/) |
 | Beabuorren-model | SWT-1.3-62 | [The Wind Power](https://www.thewindpower.net/windfarm_en_6263_beabuorren.php), secundaire bron |
 | Beabuorren-ashoogte | 60 m | [Lokaal bericht uit 2007](https://tsjerkwert.nl/start-opschaling-van-het-wynpark/); niet bevestigd voor alle acht turbines |

@@ -219,12 +219,12 @@ er niet van af; `tests/test_productie_onafhankelijk.py` controleert dat.
 
 - **89 turbines van 4,3 MW, 382,7 MW**: [exploitant](https://www.windparkfryslan.nl/onderwerpen/windturbines/).
 - **Ashoogte 115 m boven water**: zie [Ashoogte en verticale referentie](#ashoogte-en-verticale-referentie).
-- **Turbinetype Siemens Gamesa SWT-DD-130**: volgens [Wikipedia](https://en.wikipedia.org/wiki/Windpark_Frysl%C3%A2n);
-  de daar gelinkte fabrikantpagina werkt niet meer.
-- **Geen gepubliceerde vermogenscurve**: de [turbinedatabase](https://en.wind-turbine-models.com/turbines/1898-siemens-gamesa-swt-dd-130)
-  heeft er geen. Daarom gebruikt het model een kubisch scenario met gekozen
-  grenzen (3 / 11,5 / 25 m/s); een curve van een ander 130-metermodel is bewust
-  niet gebruikt.
+- **Turbinetype Siemens Gamesa SWT-DD-130**: [Siemens Gamesa, persbericht Fryslân](https://www.siemensgamesa.com/global/en/home/press-releases/Van-Oord-preferred-contractor-030817.html).
+- **Vermogenscurve**: gedigitaliseerde fabrikantgrafiek, 4,3 MW / 107 dB, pagina 39
+  van *Siemens Gamesa Onshore* (2023). De punten zijn afgerond op 10 kW; de
+  referentieluchtdichtheid en de projectspecifieke bedrijfsinstelling zijn onbekend.
+  De modelgrens 28,01 m/s is een technische bereikgrens, geen bevestigde fysieke
+  uitschakeling. Zie [curve en omzetting](curves/README.md).
 
 ## Wynpark Beabuorren
 

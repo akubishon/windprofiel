@@ -1,5 +1,11 @@
 # Model en gemeten productie: oud en nieuw
 
+> Historische analyse met de vorige kubische turbinecurve. Sinds de activering van
+> de gedigitaliseerde SWT-DD-130-curve (modelversie 12) zijn de windjaren voor de
+> waterstofberekeningen opnieuw doorgerekend. De cijfers hieronder zijn niet
+> opnieuw gevalideerd en beschrijven niet de huidige standaardcurve.
+
+
 Vergelijking van de gemodelleerde mogelijke opbrengst van Windpark Fryslân met de gemeten
 dagproductie, voor de oude, op productie afgestelde methoden en de nieuwe, productie-onafhankelijke
 methode. Opnieuw te maken met `python3 -m windprofiel.vergelijking --waterstof` (uitvoer in

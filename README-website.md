@@ -106,7 +106,7 @@ Elk rekenveld heeft één status: **bron** (letterlijk uit de datasheet via de A
 
 ### Berekening
 
-De vergelijking gebruikt `src/electrolyser-kernel.mjs`, een JavaScript-versie van `simulate()` en `simulate_with_replacements()` uit `opsplitsing.py` (MODEL_VERSION 11; `simulate()` is sinds versie 10 ongewijzigd, het windaanbod is vervangen). De Python-kern kost 1–3 s per opstelling en windjaar; in de browser met Pyodide duurt een vergelijking van vier opstellingen over vier jaar daardoor al gauw een minuut. De JavaScript-versie doet hetzelfde in enkele seconden, in een aparte worker (`/assets/elektrolyser-rekenkern.js`) met voortgang. De port volgt de Python-bewerkingsvolgorde, inclusief `sum()` met compensatie, `round(x, 2)`, `random.Random` (MT19937) en Europe/Amsterdam-wandkloktijd voor onderhoud. Tests tonen gelijke uitkomsten (verschil 0 in alle referentiegevallen; toegestaan 1e-9 relatief).
+De vergelijking gebruikt `src/electrolyser-kernel.mjs`, een JavaScript-versie van `simulate()` en `simulate_with_replacements()` uit `opsplitsing.py` (MODEL_VERSION 12; `simulate()` is sinds versie 10 ongewijzigd, het windaanbod is vervangen). De Python-kern kost 1–3 s per opstelling en windjaar; in de browser met Pyodide duurt een vergelijking van vier opstellingen over vier jaar daardoor al gauw een minuut. De JavaScript-versie doet hetzelfde in enkele seconden, in een aparte worker (`/assets/elektrolyser-rekenkern.js`) met voortgang. De port volgt de Python-bewerkingsvolgorde, inclusief `sum()` met compensatie, `round(x, 2)`, `random.Random` (MT19937) en Europe/Amsterdam-wandkloktijd voor onderhoud. Tests tonen gelijke uitkomsten (verschil 0 in alle referentiegevallen; toegestaan 1e-9 relatief).
 
 Een opstelling wordt `Aannames(capaciteit_mw, minimumlast, systeemverbruik_vol, deellastvoordeel, BoP, …)` met n modules. De standaardbesturing is `verdelen`; `bijschakelen` en `samen` zijn te kiezen. Algemene aannames zijn voor alle opstellingen gelijk: besturing, minimale aan- en uit-tijd, startvertraging, opstarttijden, koud na, warmhouden, onderhoud, storingen, hersteltijd en stilstand per stackwissel. Standaard zijn dat de waarden van `Aannames()` (PEM/EU-tool, deels plaatshouders). Storingen volgen in elke opstelling dezelfde vaste trekking per module en jaar (zaad jaar × 100 + modulenummer); meer modules betekent meer, kleinere storingen.
 
@@ -170,7 +170,7 @@ Iframe embedding is permitted: responses omit X-Frame-Options and CSP frame-ance
 
 ## Elektrolyser opsplitsen
 
-`/opsplitsing` (ook `/elektrolyser/opsplitsen`) bevat de pagina uit `akubishon/windprofiel`, bijgewerkt in oktober 2026 naar modelversie 11 (productie-onafhankelijke windbron, `windbron.py`). De Python-bestanden in `src/opsplitsing/python/` zijn kopieën van `windprofiel/`; herkomst en hashes staan in `src/opsplitsing/PROVENANCE.json`.
+`/opsplitsing` (ook `/elektrolyser/opsplitsen`) bevat de pagina uit `akubishon/windprofiel`, bijgewerkt in oktober 2026 naar modelversie 12 (productie-onafhankelijke windbron en gedigitaliseerde turbinecurve). De Python-bestanden in `src/opsplitsing/python/` zijn kopieën van `windprofiel/`; herkomst en hashes staan in `src/opsplitsing/PROVENANCE.json`.
 
 De site draait als JavaScript Worker en kan geen Python-processen starten. Daarom voert een aparte browserworker het oorspronkelijke model uit met Pyodide 0.29.3, geladen van de vaste versie op jsDelivr. De browseradapter vervangt uitsluitend multiprocessing door seriële uitvoering, en KNMI-verzoeken door de meegeleverde jaarreeksen 2022–2025. Deze zijn met `supply_year` en de standaard windmethode `onafhankelijk` berekend: per tien minuten het gemiddelde van Houtribdijk en Stavoren, met de WINS50-hoogtevertaling uit `windprofiel/data/ashoogte.json`; de oude reeksen (hoogste van beide stations, op productie geijkte α) zijn vervangen. De oude windmethoden draaien alleen lokaal in Python. Opgeslagen scenario’s van vóór modelversie 11 staan als verouderd in de lijst. Minimumlast, technologieën, kosten, storingen, drie besturingen, dagvoorbeelden, gevoeligheidsanalyse, omslagkaart en CSV-export gebruiken de oorspronkelijke code. Grote analyses kunnen enkele minuten duren; de pagina moet openblijven. De vier historische windjaren zijn een momentopname en worden niet automatisch uitgebreid.
 
@@ -205,7 +205,7 @@ De eerste maximaal zeven complete toekomstige uurpunten worden getoond, met run-
 
 ### Onbegrensd windpotentieel op de parkpagina’s
 
-In de MW-weergave staat ‘Theoretisch windpotentieel · onbegrensd’ standaard aan. De visuele KNMI-reeksen en HARMONIE-overlay gebruiken dan `src/wind-potential.mjs`: dezelfde ashoogte-/seizoens-/zogcorrectie en een kubische referentiecurve, zonder bovengrens op nominaal vermogen of uitschakelwind. Dit is een scenario in MW-equivalent, niet het leverbare vermogen van de bestaande turbines. Voor Beabuorren is dit expliciet een generieke kubische scenariocurve en geen extrapolatie van de gecertificeerde fabrikantcurve. De formule en referentiewindsnelheden staan op de pagina.
+In de MW-weergave staat ‘Theoretisch windpotentieel · onbegrensd’ standaard uit. De begrensde berekening gebruikt de turbinecurve. Na inschakelen gebruiken de visuele KNMI-reeksen en HARMONIE-overlay dan `src/wind-potential.mjs`: dezelfde ashoogte-/seizoens-/zogcorrectie en een kubische referentiecurve, zonder bovengrens op nominaal vermogen of uitschakelwind. Dit is een scenario in MW-equivalent, niet het leverbare vermogen van de bestaande turbines. Voor Beabuorren is dit expliciet een generieke kubische scenariocurve en geen extrapolatie van de gecertificeerde fabrikantcurve. De formule en referentiewindsnelheden staan op de pagina.
 
 De bronpunten en API-resultaten blijven ongewijzigd; alleen kopieën voor de grafiek worden omgerekend. Productiebalken, dagtotalen, energie-/elektrolyserberekeningen en uur-CSV blijven het bestaande begrensde model gebruiken. In de tienminuten-CSV is het modeltype expliciet en blijft de energiecel leeg bij theoretisch potentieel. De MW-as begint bij 44 MW en groeit op basis van alle zichtbare reeksen. De schakelaar herstelt de begrensde weergave.
 
@@ -302,3 +302,12 @@ niet het vaste HARMONIE-roosterpunt. Alle parameters zijn ook bij Beabuorren
 zichtbaar; start- en nominale wind gelden daar alleen voor het theoretische
 scenario. De volgorde startwind < nominale wind < uitschakelwind wordt bij
 toepassen gevalideerd.
+
+
+## Actieve turbinecurve Fryslân
+
+De begrensde KNMI- en HARMONIE-berekeningen gebruiken de gedigitaliseerde
+SWT-DD-130-curve bij 4,3 MW / 107 dB, inclusief vermogensafname bij hoge wind.
+De parkpagina start met dit begrensde model. De bereikgrens 28,01 m/s is een
+technische aanname; zie [bron en beperkingen](docs/curves/README.md). De jaarreeksen
+voor elektrolyse zijn met dezelfde curve opnieuw uit de opgeslagen wind berekend.

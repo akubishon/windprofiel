@@ -65,7 +65,7 @@ Vereist Python 3.12 of nieuwer; er zijn geen externe pakketten nodig.
 | KNMI-wind | gemiddelde van Houtribdijk en Stavoren | gemiddelde van Houtribdijk en Stavoren |
 | Ashoogte | 115 m boven water | 60 m |
 | Hoogtevertaling | factor per maand uit WINS50 (HARMONIE) op de parklocatie | idem, op 60 m |
-| Vermogenscurve | kubisch scenario: 3 / 11,5 / 25 m/s | secundaire gepubliceerde curve |
+| Vermogenscurve | gedigitaliseerde SWT-DD-130, 4,3 MW / 107 dB | secundaire gepubliceerde curve |
 | Zogverlies | 5 % minder wind | 2 % minder wind |
 | Beschikbaarheid | 100 % (mogelijke opbrengst) | 100 % |
 
@@ -208,6 +208,13 @@ Een eigen curve is een JSON-bestand met:
 
 Een geüploade curve gaat voor op het standaardmodel. De controle van het formaat
 is geen certificering van de bron.
+
+Een importbestand voor de **SWT-DD-130 bij 4,3 MW / 107 dB** staat in
+[`docs/curves/fryslan-swt-dd-130-4.3-107db.json`](docs/curves/fryslan-swt-dd-130-4.3-107db.json).
+Het bevat benaderde punten uit een fabrikantgrafiek, inclusief vermogensafname bij
+hoge wind. Lees vóór gebruik de [herkomst en bereikgrens](docs/curves/README.md):
+de fysieke uitschakelsnelheid is niet bekend. De curve is actief als standaard in Python, de website en de waterstofberekeningen.
+Een eigen upload blijft voorrang houden op de standaardcurve.
 
 ## Projectindeling
 

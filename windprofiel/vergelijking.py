@@ -183,11 +183,12 @@ def timezone_check(stations: dict[int, dict], pm: windbron.ParkMethod, measured:
     """
     wake, rated = PARKS["fryslan"]["wake_deficit"], FRYSLAN_SCENARIO["rated_speed"]
     energy = {}
+    curve = load_curve("fryslan")
     for year, values in stations.items():
         for t in sorted(set().union(*(series.keys() for series in values.values()))):
             v, _ = windbron.select(pm, {key: series.get(t) for key, series in values.items()})
             if v is not None:
-                energy[t] = fryslan_power(v * windbron.factor("fryslan", pm, t), wake, rated, None) / 6
+                energy[t] = fryslan_power(v * windbron.factor("fryslan", pm, t), wake, rated, curve) / 6
     out = {}
     for name, to_day in (("Europe/Amsterdam", lambda t: t.astimezone(LOCAL).date()),
                          ("UTC", lambda t: t.date()),
@@ -238,7 +239,8 @@ def compare(client: KNMIClient | None = None) -> dict:
         values["houtribdijk_drift"] = {t: v * correction for t, v in values["houtribdijk"].items()}
     measured = productie.load()
     curve = load_curve("fryslan")
-    results = {name: variant_days(stations, pm, wake, rated, curve) for name, (_, pm, wake, rated) in options.items()}
+    results = {name: variant_days(stations, pm, wake, rated, None if name.startswith("nominale_wind_") else curve)
+               for name, (_, pm, wake, rated) in options.items()}
     selection = common_days(results, measured)
     summary = {name: {"uitleg": options[name][0], "eigen_volledige_dagen": summarise(days, measured)["dagen"],
                       **summarise(days, measured, selection)} for name, days in results.items()}

@@ -4,9 +4,10 @@ import {theoreticalWindMW,potentialPoints,potentialComparison} from '../src/wind
 import {modelOptions,windPowerModel} from '../src/knmi.mjs';
 const settings={park:'fryslan',height:'10',alpha:'0.115',wake:'0',wakePercent:'5',ratedKW:'4300',cutIn:'3',ratedSpeed:'11.5',cutOut:'25',seasonal:'0'};
 const date='2026-10-22T12:00:00Z';
-test('theoretical curve agrees below rated, rises above nominal and stays separate from physical cut-out',()=>{
+test('theoretical cubic scenario stays separate from the digitized turbine curve',()=>{
  const physical=windPowerModel(date.slice(0,10),modelOptions(new URLSearchParams(settings)));
- assert.ok(Math.abs(theoreticalWindMW(8,date,settings)-physical(8))<1e-9);
+ assert.ok(Math.abs(physical(8)-1920*89/1000)<1e-9);
+ assert.ok(Math.abs(theoreticalWindMW(8,date,settings)-physical(8))>1);
  assert.equal(theoreticalWindMW(11.5,date,settings),89*4300/1000);
  assert.ok(theoreticalWindMW(15,date,settings)>89*4300/1000);
  assert.equal(physical(15),89*4300/1000);

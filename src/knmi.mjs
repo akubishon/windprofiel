@@ -1,3 +1,4 @@
+import fryslanCurve from './opsplitsing/python/data/fryslan.json' with { type: 'json' };
 import stationCatalog from './stations.json' with { type: 'json' };
 const beabuorrenCurve=[[1, 0.0], [1.5, 0.0], [2, 0.0], [2.5, 0.0], [3.1, 1.54], [3.5, 11.78], [4, 32.0], [4.5, 58.2], [5, 90.0], [5.5, 127.66], [6, 172.0], [6.5, 224.18], [7, 286.0], [7.5, 358.77], [8, 441.0], [8.5, 530.51], [9, 625.0], [9.5, 722.21], [10, 820.0], [10.5, 915.92], [11, 1006.0], [11.5, 1086.13], [12, 1153.0], [12.5, 1204.31], [13, 1241.0], [13.5, 1265.11], [14, 1280.0], [14.5, 1288.98], [15, 1294.0], [15.5, 1296.58], [16, 1298.0], [16.5, 1299.9], [17, 1300.0], [17.5, 1300.0], [18, 1300.0], [18.5, 1300.0], [19, 1300.0], [19.5, 1300.0], [20, 1300.0], [20.5, 1300.0], [21, 1300.0], [21.5, 1300.0], [22, 1300.0], [22.5, 1300.0], [23, 1300.0], [23.5, 1300.0], [24, 1300.0], [24.5, 1300.0]];
 const windCache = new Map();
@@ -12,7 +13,7 @@ export function modelOptions(params) {
   if(!selectedStation)throw Error('INVALID_MODEL_OPTIONS');
   const wake=params.get('wake')??'1', seasonal=params.get('seasonal')??(isBea?'0':'1');
   if(!['0','1'].includes(wake)||!['0','1'].includes(seasonal))throw Error('INVALID_MODEL_OPTIONS');
-  const o={park,station,stationId,stationName:selectedStation.name,wake:wake==='1',seasonal:seasonal==='1',height:number('height',isBea?60:115,10,250),alpha:number('alpha',isBea?.2:.115,0,.5),wakePercent:number('wakePercent',isBea?2:5,0,30),ratedKW:number('ratedKW',isBea?1300:4300,100,10000),cutIn:number('cutIn',3,0,10),ratedSpeed:number('ratedSpeed',11.5,1,25),cutOut:number('cutOut',25,5,40)};
+  const o={park,station,stationId,stationName:selectedStation.name,wake:wake==='1',seasonal:seasonal==='1',height:number('height',isBea?60:115,10,250),alpha:number('alpha',isBea?.2:.115,0,.5),wakePercent:number('wakePercent',isBea?2:5,0,30),ratedKW:number('ratedKW',isBea?1300:4300,100,10000),cutIn:number('cutIn',3,0,10),ratedSpeed:number('ratedSpeed',11.5,1,25),cutOut:number('cutOut',isBea?25:fryslanCurve.cut_out,5,40)};
   if(!(o.cutIn<o.ratedSpeed&&o.ratedSpeed<o.cutOut))throw Error('INVALID_MODEL_OPTIONS');
   return o;
 }
@@ -20,13 +21,17 @@ export function windPowerModel(day,options) {
   const base=Date.parse(day+'T00:00:00Z');
   const doy=Math.floor((base-Date.UTC(Number(day.slice(0,4)),0,1))/86400000)+1;
   const alpha=options.alpha+(options.seasonal?.065*Math.cos(2*Math.PI*(doy-1)/365):0);
-  const cubic=v=>v<options.cutIn||v>options.cutOut?0:v>=options.ratedSpeed?options.ratedKW:options.ratedKW*(v**3-options.cutIn**3)/(options.ratedSpeed**3-options.cutIn**3);
+  const isBea=options.park==='beabuorren';
+  const curve=isBea?beabuorrenCurve:fryslanCurve.points;
+  // A lower user limit may stop production earlier; it cannot extend the digitized source range.
+  const cutOut=isBea?options.cutOut:Math.min(options.cutOut,fryslanCurve.cut_out);
   const turbine=v=>{
-    if(options.park!=='beabuorren')return cubic(v);
-    if(v<beabuorrenCurve[0][0]||v>=options.cutOut)return 0;
-    let i=beabuorrenCurve.findIndex(p=>p[0]>v);if(i<0)return options.ratedKW;
-    const [v0,p0]=beabuorrenCurve[i-1], [v1,p1]=beabuorrenCurve[i];
-    return (p0+(p1-p0)*(v-v0)/(v1-v0))*options.ratedKW/1300;
+    if(v<curve[0][0]||v>=cutOut)return 0;
+    const i=curve.findIndex(p=>p[0]>v);
+    const nominal=isBea?1300:4300;
+    if(i<0)return curve.at(-1)[1]*options.ratedKW/nominal;
+    const [v0,p0]=curve[i-1], [v1,p1]=curve[i];
+    return (p0+(p1-p0)*(v-v0)/(v1-v0))*options.ratedKW/nominal;
   };
   return v=>{if(v===null)return null;const hub=v*(options.height/10)**alpha, unperturbed=turbine(hub);return (options.wake&&unperturbed>0?turbine(hub*(1-options.wakePercent/100)):unperturbed)*(options.park==='beabuorren'?8:89)/1000;};
 }

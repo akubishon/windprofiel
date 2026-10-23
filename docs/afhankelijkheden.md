@@ -28,14 +28,14 @@ in [rekenmodel.md](rekenmodel.md#1-wind-op-ashoogte); de vergelijking van oud en
 | Keuze | Waarde | Herkomst |
 | --- | --- | --- |
 | Ashoogte Fryslân | 115 m boven water | Exploitant: ‘hoogte van een windturbine boven water is 180 meter’, min de helft van 130 m rotordiameter. Gecontroleerd in oktober 2026, zie [databronnen](databronnen.md#ashoogte-en-verticale-referentie) |
-| Turbinecurve Fryslân | kubisch, 3 / 11,5 / 25 m/s | Afgesproken scenario, geen fabrikantcurve |
+| Turbinecurve Fryslân | gedigitaliseerde SWT-DD-130, 4,3 MW / 107 dB | Fabrikantpresentatie; modelgrens 28,01 m/s is een technische aanname |
 | Zogverlies | 5 % Fryslân, 2 % Beabuorren minder wind | Scenario-aanname, niet gekalibreerd |
 | Beabuorren | 60 m, curve SWT-1.3-62 | Lokaal nieuws, secundaire curve |
 | Beabuorren, oud | Stavoren, α 0,20 | Dichtstbijzijnde station en land-aanname, niet op productie afgesteld; vervangen door dezelfde bron als Fryslân met een eigen WINS50-factor, zodat beide parken en beide routes één methode volgen |
 | Aandeel voor waterstof | 10 % Fryslân + 100 % Beabuorren | mijnwindpark.nl |
 
-De curve en het zogverlies zijn niet op productie afgesteld, maar de oude `α` is wél
-gefit mét deze curve en dit zogverlies. Fouten in curve en zog zijn daardoor deels in
+De huidige curve en het zogverlies zijn niet op productie afgesteld. De oude `α` is wél
+gefit met de vorige kubische curve en dit zogverlies. Fouten in curve en zog zijn daardoor deels in
 de oude `α` terechtgekomen; met een onafhankelijke hoogtevertaling worden ze zichtbaar
 als verschil tussen model en gemeten productie.
 
