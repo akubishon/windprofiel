@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {theoreticalWindMW,potentialPoints,potentialComparison} from '../src/wind-potential.mjs';
-import {modelOptions,windPowerModel} from '../src/knmi.mjs';
-const settings={park:'fryslan',height:'10',alpha:'0.115',wake:'0',wakePercent:'5',ratedKW:'4300',cutIn:'3',ratedSpeed:'11.5',cutOut:'25',seasonal:'0'};
+import {modelOptions,windPowerModel,hubFactor} from '../src/knmi.mjs';
+const settings={park:'fryslan',hoogte:'alpha',height:'10',alpha:'0.115',wake:'0',wakePercent:'5',ratedKW:'4300',cutIn:'3',ratedSpeed:'11.5',cutOut:'25',seasonal:'0'};
 const date='2026-10-22T12:00:00Z';
 test('theoretical cubic scenario stays separate from the digitized turbine curve',()=>{
  const physical=windPowerModel(date.slice(0,10),modelOptions(new URLSearchParams(settings)));
@@ -19,4 +19,13 @@ test('missing wind remains unknown, and theoretical display never mutates origin
  const scenario=potentialPoints(source,settings);assert.ok(scenario[0].powerMW>source[0].powerMW);assert.equal(source[0].powerMW,382.7);
  const c=potentialComparison({stavoren:source,houtribdijk:[{...source[0],windSpeedMS:18}],combination:[{...source[0],windSpeedMS:18,highestStation:'Houtribdijk'}]},settings);
  assert.equal(c.combination[0].powerMW,c.houtribdijk[0].powerMW);assert.ok(c.combination[0].differenceMW>0);assert.equal(c.combination[0].highestStation,'Houtribdijk');
+});
+
+test('WINS50 theoretical scenario retains the same height translation as the turbine model',()=>{
+ const s={...settings,hoogte:'wins50',station:'gemiddelde'};
+ const o=modelOptions(new URLSearchParams(s)),v=5*hubFactor(date.slice(0,10),o);
+ const cubic=4300*Math.max(0,(v**3-3**3)/(11.5**3-3**3))*89/1000;
+ assert.ok(Math.abs(theoreticalWindMW(5,date,s)-cubic)<1e-9);
+ const digitized=windPowerModel(date.slice(0,10),o)(5);
+ assert.ok(Math.abs(digitized-cubic)>1);
 });
