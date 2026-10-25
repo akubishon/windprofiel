@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 
-const source = await readFile(new URL('../windprofiel/static/opsplitsing.js', import.meta.url), 'utf8');
+const source = await readFile(new URL('../src/opsplitsing/opsplitsing.js', import.meta.url), 'utf8');
 
 function presentation(meta = {groepen: []}) {
   const context = vm.createContext({
