@@ -178,7 +178,7 @@ Opgeslagen scenario’s worden op dit apparaat in localStorage bewaard, met een 
 
 Controleren: `node scripts/test-python-browser.mjs` vergelijkt de browser-Python-uitkomsten exact met een native Python-referentie voor 2025 en modules 1 en 2, en controleert het dagvoorbeeld. `npm run compose`, `npm test` en `npm run build` controleren routes, toegangscontrole, jaarreeksen en het publicatiebestand. De testfixture staat in `tests/fixtures/opsplitsing-2025-native.json`.
 
-De opsplitsingspresentatie houdt marginale kosten en gemiddelde kostprijs naast elkaar zichtbaar. Elke stap vergelijkt de volgende gekozen configuratie bij hetzelfde totaalvermogen. De compacte tabel toont LCOH op drie decimalen, het verschil met de vorige configuratie in cent/kg en het verschil met de laagste doorgerekende kostprijs. De open stappentabel behoudt productieverschillen, uren, jaarkosten en LCOH vóór/na; geen of negatieve extra productie wordt niet als een geldige prijs van extra kilo's voorgesteld. Negatieve kosten en productieverschillen blijven zichtbaar. De markering ‘laagste berekend’ geldt uitsluitend binnen de getoonde instellingen.
+De opsplitsingspresentatie houdt marginale kosten en gemiddelde kostprijs naast elkaar zichtbaar. Elke stap vergelijkt de volgende gekozen configuratie bij hetzelfde totaalvermogen. De compacte tabel toont LCOH op twee decimalen, het verschil met de vorige configuratie in cent/kg en het verschil met de laagste doorgerekende kostprijs. De stappentabel onder Onderbouwing behoudt productieverschillen, uren, jaarkosten en LCOH vóór/na; geen of negatieve extra productie wordt niet als een geldige prijs van extra kilo's voorgesteld. Negatieve kosten en productieverschillen blijven zichtbaar. De markering ‘laagste berekend’ geldt uitsluitend binnen de getoonde instellingen.
 
 De uitkomst toont haar eigen aannames, windjaren en het gebruik van één vaste storingstrekking per module en jaar. Jaarspreiding is geen betrouwbaarheidsinterval. CSV exporteert alle oorspronkelijke rijvelden plus ongeronde stapverschillen en aannames (kommadecimalen, puntkomma's); contextkolommen hebben de prefix `berekening.`, stapvelden `stap.` en aannames `aanname.`. Aannames staan in oorspronkelijke rekeneenheden. JSON bewaart de volledige uitkomst en veldmetadata. Vervolgdiagrammen, de dagweergave en opgeslagen scenario's gebruiken dezelfde resultaataannames, ook nadat het formulier is aangepast. Een melding maakt zichtbaar wanneer invoer en getoonde uitkomst verschillen. De Pythonberekeningen, historische reeksen en aannames zijn niet gewijzigd. `tests/opsplitsing-presentation.test.mjs` controleert de omkering in 2022 (4/5/6 modules), ontbrekende en negatieve verschillen, verzoek-snapshots en exportbehoud.
 
@@ -187,6 +187,8 @@ Via **Leg deze berekening uit** opent een rekenrapport van de laatste berekende 
 **Afdrukken / PDF** opent de browserafdruk met alleen het rapport en alle rekenstappen. **Excel met formules** maakt lokaal een `.xlsx` met bewerkbare kosteninvoer, vaste jaaruitkomsten, echte Excel-formules en controleverschillen; het simuleert geen aangepaste technische bedrijfsvoering. Rapportdata zijn ook als JSON te bewaren. Er worden geen rapportgegevens naar een externe exportdienst gestuurd. `tests/report-*.test.mjs` controleren modelaansluiting, nulproductie, herkomst, snapshots, asynchrone antwoorden, dagrekenwerk en de Excel-formules.
 
 
+
+De uitkomst begint met een conclusie in gewone taal en twee opstellingen in vaste kleuren. Drie rekenblokken tonen ton waterstof per jaar, de vier jaarkostenposten in miljoen euro en twee decimalen bij €/kg. Ingevulde formules staan achter **Bekijk de berekening**; **Narekenen** en Excel behouden de beschikbare precisie. Het rekenrapport toont één gekozen voorbeeldmoment tegelijk (weinig wind, veel wind of opstarten), met een keten van wind naar kilo’s. Bronnen, alle invoerwaarden, jaaromrekening en controles staan onder **Onderbouwing**. De belangrijkste aannames en de sterkste verschuiving uit de bestaande gevoeligheidscontrole blijven direct bij de uitkomst zichtbaar. Het rekenmodel is niet gewijzigd.
 
 ## Windbron (productie-onafhankelijk)
 
@@ -215,11 +217,17 @@ Verification: `npm test` covers the existing Worker behavior plus wind-before-po
 De daganalyse gebruikt een samenhangende werkruimte: daggrafiek, tijdschuif en productie per configuratie links; zes compacte rekenstappen rechts. De kernwaarden blijven zichtbaar, formules zijn per stap uit te klappen en ‘Alle rekenstappen tonen’ opent alles. De keuze blijft behouden bij wisselen van tijdstip. Vorige/volgende bedient één tienminutenstap. Brede schermen tonen maximaal twee grote resultaatgrafieken per rij; gewone tekst en tabellen zijn groter gezet. Op kleine schermen stapelen de onderdelen en scrolt alleen de daggrafiek horizontaal.
 
 
-## HARMONIE op Slim schakelen
+## Navigatie en HARMONIE
 
-`/slim-schakelen` haalt via de bestaande sitelogin `/api/harmonie` op. De server gebruikt de geheime runtimevariabele `KNMI_OPEN_DATA_API_KEY` voor KNMI Open Data, niet de EDR-key. P1 1.0 wordt op bestandsnaam aflopend opgevraagd. Een ondertekende download-URL krijgt geen Authorization-header mee. De TAR wordt begrensd gestreamd; alleen reguliere lat/lon GRIB1 met eenvoudige pakking en zonder bitmap wordt geaccepteerd. Onbekende formaten geven een fout, geen nulwaarden.
+De hoofdnavigatie bevat Start, Fryslân, Beabuorren, Elektrolyser en Onderzoek.
+De startpagina toont vier directe keuzes zonder extra categoriefilters.
+Elektrolyser opsplitsen staat onder Elektrolyser naast Beschikbaar vermogen,
+Catalogus, Samenstellen en Vergelijken. Beide bestaande routes `/opsplitsing`
+en `/elektrolyser/opsplitsen` blijven beschikbaar.
 
-De eerste maximaal zeven complete toekomstige uurpunten worden getoond, met run- en ophaaltijd. Een run ouder dan zes uur krijgt een waarschuwing. Geslaagde aanvragen worden vijftien minuten in de Worker hergebruikt; fouten één minuut. Er is nog geen duurzaam voorspellingsarchief. De wind op 10 m wordt bij benaderde parkcentra uit het dichtstbijzijnde modelroosterpunt gehaald en met de bestaande hoogtecorrectie en turbinecurves naar potentieel vermogen vertaald. Toewijzing is 10% Fryslân + 100% Beabuorren vóór BoP. Productiecorrectie, aansluitbeperkingen, afregeling en automatische modulebesturing zijn niet gekoppeld. De marge blijft een handmatige aanname.
+De losse proefpagina Slim schakelen is verwijderd. `/slim-schakelen` verwijst
+door naar `/elektrolyser`. HARMONIE en de bijbehorende API blijven beschikbaar
+voor de windgrafieken op de parkpagina’s; de gegevensverwerking is ongewijzigd.
 
 ### Onbegrensd windpotentieel op de parkpagina’s
 
@@ -264,7 +272,7 @@ API: `/api/harmonie?model=p2b`; onbekende modelnamen krijgen HTTP 400.
 
 ### Vooraf verwerkte HARMONIE-voorspellingen
 
-De parkpagina’s en Slim schakelen lezen uitsluitend kleine, blijvend opgeslagen
+De parkpagina’s lezen uitsluitend kleine, blijvend opgeslagen
 R2-snapshots via `/api/harmonie`. Een snapshot bevat de beschikbare horizon van
 één modelrun met de twee roosterlocaties. De gekozen turbine-instellingen worden
 pas op die opgeslagen windsnelheden toegepast, zodat alle instellingen dezelfde

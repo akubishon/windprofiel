@@ -273,3 +273,8 @@ De HTML bevat winddata en modeluitkomsten, nooit de API-sleutel.
 De broncode van de gehoste website staat in `src/`, `worker/`, `scripts/` en
 `package.json` (Node.js 22+). Zie [README-website.md](README-website.md) voor
 starten, bouwen en configuratie; de Node-tests draaien met `npm test`.
+
+De website wijkt op één punt bewust af van de lokale webapp: op `/opsplitsing` geldt de
+44 MW als totaal systeemvermogen inclusief BoP, dus zonder extra BoP erbovenop
+(`src/opsplitsing/browser-runtime.py`). De Python-code in `windprofiel/` rekent nog
+met BoP bovenop het modulevermogen.

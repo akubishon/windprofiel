@@ -95,7 +95,14 @@ export default {
       catch(error){console.error('HARMONIE_UPDATE_FAILED',error.message);return answer({error:error.message},502);}
     }
     const gate=await gateRequest(request,env,url);if(gate)return gate;
-    if(url.pathname==='/opsplitsing'||url.pathname==='/elektrolyser/opsplitsen')return new Response(opsPage,{headers:{...securityHeaders,'Content-Security-Policy':opsPolicy,'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
+    if(url.pathname==='/opsplitsing'||url.pathname==='/elektrolyser/opsplitsen'){
+      // Cloudflare propagates header nonces to its injected JavaScript Detections script.
+      // Generate a fresh nonce for each response, never in the shared page or asset policy.
+      const nonce=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
+      const html=opsPage.replaceAll('<script ',`<script nonce="${nonce}" `);
+      const policy=opsPolicy.replace('script-src ',`script-src 'nonce-${nonce}' `);
+      return new Response(html,{headers:{...securityHeaders,'Content-Security-Policy':policy,'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
+    }
     if(url.pathname==='/api/opsplitsing/scenarios')return answer({scenarios:[]});
     if(url.pathname.startsWith('/opsplitsing-assets/')){const asset=opsAssets[url.pathname.slice('/opsplitsing-assets/'.length)];return asset?new Response(asset[0],{headers:{...securityHeaders,'Content-Security-Policy':opsPolicy,'Content-Type':asset[1]+'; charset=utf-8','Cache-Control':'private, max-age=3600'}}):answer({error:'Onbekend bestand.'},404);}
     if(url.pathname==='/api/research/auth'&&request.method==='POST'){
@@ -117,9 +124,10 @@ export default {
     }
     if (request.method !== 'GET') return answer({ error: 'Method not allowed' }, 405);
     if ((url.pathname === '/fonts/tasa-orbiter.ttf' || url.pathname === '/assets/tasa-orbiter.ttf' || url.pathname === '/proefstijl/font.ttf')) return new Response(Uint8Array.from(atob(brandFont),c=>c.charCodeAt(0)), {headers:{...securityHeaders,'Content-Type':'font/ttf','Cache-Control':'public, max-age=86400'}});
+    if(url.pathname==='/slim-schakelen')return new Response(null,{status:302,headers:{...securityHeaders,Location:'/elektrolyser'+url.search,'Cache-Control':'no-store'}});
     const formerTrialPages={'/proefstijl':'/','/proefstijl/beabuorren':'/beabuorren','/proefstijl/elektrolyser':'/elektrolyser','/proefstijl/onderzoek':'/onderzoek'};
     if(Object.hasOwn(formerTrialPages,url.pathname))return new Response(null,{status:302,headers:{...securityHeaders,Location:formerTrialPages[url.pathname]+url.search,'Cache-Control':'no-store'}});
-    if (url.pathname === '/' || url.pathname === '/fryslan' || url.pathname === '/beabuorren' || url.pathname === '/elektrolyser' || url.pathname === '/elektrolyser/catalogus' || url.pathname === '/elektrolyser/samenstellen' || url.pathname === '/elektrolyser/vergelijken' || url.pathname === '/onderzoek' || url.pathname === '/slim-schakelen') return new Response(page, { headers: { ...securityHeaders, 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin' } });
+    if (url.pathname === '/' || url.pathname === '/fryslan' || url.pathname === '/beabuorren' || url.pathname === '/elektrolyser' || url.pathname === '/elektrolyser/catalogus' || url.pathname === '/elektrolyser/samenstellen' || url.pathname === '/elektrolyser/vergelijken' || url.pathname === '/onderzoek') return new Response(page, { headers: { ...securityHeaders, 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin' } });
     if (url.pathname === '/assets/elektrolyser-rekenkern.js') return new Response(calculatorWorker, { headers: { ...securityHeaders, 'Content-Security-Policy': "default-src 'none'; connect-src 'self'", 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' } });
     if (url.pathname === '/favicon.svg') return new Response(favicon, { headers: { ...securityHeaders, 'Content-Type': 'image/svg+xml' } });
     try {
